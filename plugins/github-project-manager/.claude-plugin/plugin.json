@@ -1,6 +1,7 @@
 {
   "name": "github-project-manager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "GitHub プロジェクト管理プラグイン — Issue ライフサイクルの自動化、ステータス管理、コミットガードレール",
-  "author": "tmyuu"
+  "author": "tmyuu",
+  "repository": "https://github.com/tmyuu/claude-plugins"
 }
