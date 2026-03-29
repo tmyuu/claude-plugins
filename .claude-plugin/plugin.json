@@ -1,0 +1,6 @@
+{
+  "name": "github-project-manager",
+  "version": "0.1.0",
+  "description": "GitHub プロジェクト管理プラグイン — Issue ライフサイクルの自動化、ステータス管理、コミットガードレール",
+  "author": "tmyuu"
+}
