@@ -1,5 +1,5 @@
 #!/bin/bash
-# PostToolUse Hook: git commit 成功後に Issue ステータスを In Progress に自動更新
+# PostToolUse Hook: gh issue close / gh pr merge 成功後に Status → Done を自動更新
 # exit 0 常時（リマインド型）
 
 if ! command -v jq &>/dev/null; then
@@ -7,38 +7,54 @@ if ! command -v jq &>/dev/null; then
 fi
 
 INPUT=$(cat)
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null)
+
+# Bash ツール以外は素通り
+if [ "$TOOL_NAME" != "Bash" ]; then
+  exit 0
+fi
+
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
+STDOUT=$(echo "$INPUT" | jq -r '.tool_response.stdout // ""' 2>/dev/null)
 
-# git commit 以外は素通り（先頭行のみ判定）
+# --- Issue 番号の抽出 ---
+ISSUE_NUMS=""
+
+# 先頭行のみでコマンド種別を判定（コミットメッセージ内の文字列に誤反応しない）
 FIRST_LINE=$(echo "$CMD" | head -1)
-if ! echo "$FIRST_LINE" | grep -qE '^\s*git\s+commit\b'; then
-  exit 0
+
+# gh issue close N
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+close\b'; then
+  ISSUE_NUMS=$(echo "$CMD" | grep -oE 'gh\s+issue\s+close\s+([0-9]+)' | grep -oE '[0-9]+')
 fi
 
-# --amend はスキップ
-if echo "$CMD" | grep -qF -- '--amend'; then
-  exit 0
+# gh pr merge (成功後に紐づく Issue を取得)
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+pr\s+merge\b'; then
+  PR_NUM=$(echo "$CMD" | grep -oE 'gh\s+pr\s+merge\s+([0-9]+)' | grep -oE '[0-9]+')
+  if [ -z "$PR_NUM" ]; then
+    PR_NUM=$(gh pr view --json number --jq '.number' 2>/dev/null)
+  fi
+  if [ -n "$PR_NUM" ]; then
+    PR_BODY=$(gh pr view "$PR_NUM" --json body --jq '.body' 2>/dev/null)
+    ISSUE_NUMS=$(echo "$PR_BODY" | grep -oiE '(closes?|fix(es)?|resolves?)\s+#[0-9]+' | grep -oE '[0-9]+')
+  fi
 fi
-
-# コミットメッセージから Issue 番号を抽出
-ISSUE_NUMS=$(echo "$CMD" | grep -oE '#[0-9]+' | grep -oE '[0-9]+' | sort -u)
 
 if [ -z "$ISSUE_NUMS" ]; then
   exit 0
 fi
 
-# リポジトリ情報を取得
+# リポジトリ情報
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
 if [ -z "$REPO" ]; then
   exit 0
 fi
-
 OWNER=$(echo "$REPO" | cut -d'/' -f1)
 REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
 UPDATED_ISSUES=""
 for ISSUE_NUM in $ISSUE_NUMS; do
-  # Issue の現在のプロジェクトステータスを取得
+  # Issue のプロジェクトアイテムを取得
   ITEM_INFO=$(gh api graphql -f query='
     query($owner: String!, $repo: String!, $number: Int!) {
       repository(owner: $owner, name: $repo) {
@@ -64,13 +80,13 @@ for ISSUE_NUM in $ISSUE_NUMS; do
     continue
   fi
 
-  # 各プロジェクトアイテムのステータスを確認
-  echo "$ITEM_INFO" | jq -r '.data.repository.issue.projectItems.nodes[]? | select(.fieldValueByName.name == "Todo") | .id + "|" + .project.id' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID; do
+  # ステータスが Done 以外のアイテムを更新
+  echo "$ITEM_INFO" | jq -r '.data.repository.issue.projectItems.nodes[]? | select(.fieldValueByName.name != "Done") | .id + "|" + .project.id' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID; do
     if [ -z "$ITEM_ID" ] || [ -z "$PROJECT_ID" ]; then
       continue
     fi
 
-    # Status フィールドの ID と "In Progress" オプション ID を取得
+    # Status フィールドの ID と "Done" オプション ID を取得
     FIELD_INFO=$(gh api graphql -f query='
       query($projectId: ID!) {
         node(id: $projectId) {
@@ -87,13 +103,13 @@ for ISSUE_NUM in $ISSUE_NUMS; do
     ' -f projectId="$PROJECT_ID" 2>/dev/null)
 
     FIELD_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.id // ""' 2>/dev/null)
-    IN_PROGRESS_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.options[]? | select(.name == "In Progress") | .id' 2>/dev/null)
+    DONE_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.options[]? | select(.name == "Done") | .id' 2>/dev/null)
 
-    if [ -z "$FIELD_ID" ] || [ -z "$IN_PROGRESS_ID" ]; then
+    if [ -z "$FIELD_ID" ] || [ -z "$DONE_ID" ]; then
       continue
     fi
 
-    # ステータスを In Progress に更新
+    # ステータスを Done に更新
     gh api graphql -f query='
       mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
         updateProjectV2ItemFieldValue(input: {
@@ -105,14 +121,14 @@ for ISSUE_NUM in $ISSUE_NUMS; do
           projectV2Item { id }
         }
       }
-    ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$IN_PROGRESS_ID" 2>/dev/null
+    ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$DONE_ID" 2>/dev/null
 
     UPDATED_ISSUES="${UPDATED_ISSUES} #${ISSUE_NUM}"
   done
 done
 
 if [ -n "$UPDATED_ISSUES" ]; then
-  echo "Issue ステータスを In Progress に更新しました:${UPDATED_ISSUES}"
+  echo "Issue ステータスを Done に更新しました:${UPDATED_ISSUES}"
 fi
 
 exit 0
