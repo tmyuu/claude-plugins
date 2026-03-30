@@ -22,31 +22,78 @@ if [ -n "$REPO" ]; then
   echo ""
 fi
 
-# GitHub Projects（org → user fallback）
+# GitHub Projects（org → user fallback）+ 進捗サマリー
 OWNER=$(echo "$REPO" | cut -d'/' -f1)
+REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 if [ -n "$OWNER" ]; then
   echo "### プロジェクト"
-  # org で試行（エラー JSON が stdout に漏れないよう jq で安全にパース）
+
+  # プロジェクト一覧を取得（org → user fallback）
   ORG_RAW=$(gh api graphql -f query='{
     organization(login: "'"$OWNER"'") {
       projectsV2(first: 10, orderBy: {field: UPDATED_AT, direction: DESC}) {
-        nodes { title number }
+        nodes { title number id closed }
       }
     }
   }' 2>/dev/null)
-  ORG_PROJECTS=$(echo "$ORG_RAW" | jq -r '.data.organization.projectsV2.nodes[]? | "- \(.title) (#\(.number))"' 2>/dev/null)
+  PROJECTS_JSON=$(echo "$ORG_RAW" | jq '.data.organization.projectsV2.nodes // empty' 2>/dev/null)
 
-  if [ -n "$ORG_PROJECTS" ]; then
-    echo "$ORG_PROJECTS"
-  else
-    # user で fallback
-    gh api graphql -f query='{
+  if [ -z "$PROJECTS_JSON" ] || [ "$PROJECTS_JSON" = "null" ]; then
+    PROJECTS_JSON=$(gh api graphql -f query='{
       viewer {
         projectsV2(first: 10, orderBy: {field: UPDATED_AT, direction: DESC}) {
-          nodes { title number }
+          nodes { title number id closed }
         }
       }
-    }' 2>/dev/null | jq -r '.data.viewer.projectsV2.nodes[]? | "- \(.title) (#\(.number))"' 2>/dev/null
+    }' 2>/dev/null | jq '.data.viewer.projectsV2.nodes // []' 2>/dev/null)
+  fi
+
+  # 各プロジェクトの進捗を表示
+  if [ -n "$PROJECTS_JSON" ] && [ "$PROJECTS_JSON" != "null" ] && [ "$PROJECTS_JSON" != "[]" ]; then
+    echo "$PROJECTS_JSON" | jq -r '.[] | "\(.id)|\(.title)|\(.number)|\(.closed)"' 2>/dev/null | while IFS='|' read -r PROJECT_ID TITLE NUMBER CLOSED; do
+      if [ "$CLOSED" = "true" ]; then
+        continue
+      fi
+
+      # プロジェクト内アイテムのステータスを集計
+      ITEMS_RAW=$(gh api graphql -f query='
+        query($projectId: ID!) {
+          node(id: $projectId) {
+            ... on ProjectV2 {
+              items(first: 100) {
+                nodes {
+                  fieldValueByName(name: "Status") {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      name
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ' -f projectId="$PROJECT_ID" 2>/dev/null)
+
+      TOTAL=$(echo "$ITEMS_RAW" | jq '[.data.node.items.nodes[]] | length' 2>/dev/null)
+      DONE=$(echo "$ITEMS_RAW" | jq '[.data.node.items.nodes[] | select(.fieldValueByName.name == "Done")] | length' 2>/dev/null)
+      IN_PROGRESS=$(echo "$ITEMS_RAW" | jq '[.data.node.items.nodes[] | select(.fieldValueByName.name == "In Progress")] | length' 2>/dev/null)
+      TODO=$(echo "$ITEMS_RAW" | jq '[.data.node.items.nodes[] | select(.fieldValueByName.name == "Todo")] | length' 2>/dev/null)
+
+      TOTAL=${TOTAL:-0}
+      DONE=${DONE:-0}
+      IN_PROGRESS=${IN_PROGRESS:-0}
+      TODO=${TODO:-0}
+
+      if [ "$TOTAL" -eq 0 ]; then
+        echo "- ${TITLE} (#${NUMBER}) — アイテムなし"
+      elif [ "$TOTAL" -eq "$DONE" ] && [ "$TOTAL" -gt 0 ]; then
+        echo "- ${TITLE} (#${NUMBER}) — ${DONE}/${TOTAL} Done **全完了。クローズを検討してください**"
+      else
+        echo "- ${TITLE} (#${NUMBER}) — ${DONE}/${TOTAL} Done, ${IN_PROGRESS} In Progress, ${TODO} Todo"
+      fi
+    done
+  else
+    echo "（プロジェクトなし）"
   fi
   echo ""
 fi
