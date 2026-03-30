@@ -35,7 +35,12 @@ if [ -n "$ERRORS" ]; then
   echo "gh issue create に必須オプションが不足しています:" >&2
   echo "" >&2
   echo -e "$ERRORS" >&2
+  echo "※ 作成前に SessionStart で注入された「オープン Issue」一覧を確認し、" >&2
+  echo "  同じ目的の Issue が既にないか確認してください。" >&2
   exit 2
 fi
+
+# 通過する場合もリマインド（stdout で注入）
+echo "✓ Issue 作成チェック通過。重複 Issue がないことを確認済みですか？"
 
 exit 0
