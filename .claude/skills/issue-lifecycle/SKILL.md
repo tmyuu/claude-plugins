@@ -24,6 +24,7 @@ user-invocable: false
 - アクションアイテムは**チェックリスト形式**で分解
 - ラベル（フェーズ + 重要度）・タイプ・アサイン・プロジェクト紐付けを**全て設定**
 - タイプは GraphQL API で設定（`gh issue create` では設定不可）
+- 親子関係は **GitHub Sub-issues（relationships）** で設定する（`Parent: #N` テキストは使わない）
 
 ## Issue 更新
 
