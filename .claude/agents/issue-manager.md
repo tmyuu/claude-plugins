@@ -99,3 +99,55 @@ mutation {
 ### プロジェクトに Issue を追加
 `gh issue create --project "プロジェクト名"` で Issue 作成時に自動追加。
 既存 Issue の追加は `addProjectV2ItemById` mutation を使用。
+
+## Relationships（Issue 間の関係）
+
+GitHub Issue サイドバーの Relationships を活用する。
+
+### Sub-issues（親子関係）
+子 Issue を作成したら Sub-issues API で紐付ける:
+```bash
+CHILD_ID=$(gh api repos/{owner}/{repo}/issues/{child} --jq '.id')
+gh api repos/{owner}/{repo}/issues/{parent}/sub_issues -F sub_issue_id="$CHILD_ID"
+```
+
+### Blocks / Blocked by（依存関係）
+ある Issue が完了しないと次に進めない場合に設定:
+- テスト Issue → 納品 Issue を Blocks
+- 実装 Issue → テスト Issue を Blocks
+
+GraphQL で設定:
+```bash
+gh api graphql -f query='
+mutation {
+  addIssueRelation(input: {
+    issueId: "BLOCKING_ISSUE_NODE_ID"
+    relatedIssueId: "BLOCKED_ISSUE_NODE_ID"
+    relationType: BLOCKS
+  }) {
+    issue { number }
+  }
+}'
+```
+
+### 使い分け
+- **Sub-issues**: 「この作業は親タスクの一部」（議事録→タスク、親機能→サブタスク）
+- **Blocks**: 「この Issue が終わらないと次に進めない」（実装→テスト→検収→納品）
+- **Duplicates**: 同じ問題を報告した重複 Issue（`gh issue close --reason "not planned"` と併用）
+
+## Development（コードとの関係）
+
+### ブランチ命名規則
+Issue に対応するブランチは以下の命名規則に従う:
+```
+feature/#N-短い説明    例: feature/#20-search-function
+fix/#N-短い説明        例: fix/#16-webhook-validation
+```
+
+ブランチ作成: `git checkout -b feature/#N-description`
+→ GitHub が自動的に Development サイドバーにリンク
+
+### PR とのリンク
+- PR 本文に `Closes #N` を含める → マージ時に自動クローズ + Development にリンク
+- 複数 Issue を解決: `Closes #N, Closes #M`
+- PR を作成するが Issue をクローズしない場合: `Refs #N`（リンクのみ、クローズしない）

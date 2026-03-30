@@ -24,6 +24,11 @@
             "type": "command",
             "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/scripts/check-issue-create.sh\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/scripts/check-branch.sh\"",
+            "timeout": 5
           }
         ]
       }
