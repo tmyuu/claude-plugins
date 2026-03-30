@@ -26,26 +26,27 @@ fi
 OWNER=$(echo "$REPO" | cut -d'/' -f1)
 if [ -n "$OWNER" ]; then
   echo "### プロジェクト"
-  # org で試行
-  ORG_PROJECTS=$(gh api graphql -f query='{
+  # org で試行（エラー JSON が stdout に漏れないよう jq で安全にパース）
+  ORG_RAW=$(gh api graphql -f query='{
     organization(login: "'"$OWNER"'") {
       projectsV2(first: 10, orderBy: {field: UPDATED_AT, direction: DESC}) {
         nodes { title number }
       }
     }
-  }' --jq '.data.organization.projectsV2.nodes[] | "- \(.title) (#\(.number))"' 2>/dev/null)
+  }' 2>/dev/null)
+  ORG_PROJECTS=$(echo "$ORG_RAW" | jq -r '.data.organization.projectsV2.nodes[]? | "- \(.title) (#\(.number))"' 2>/dev/null)
 
   if [ -n "$ORG_PROJECTS" ]; then
     echo "$ORG_PROJECTS"
   else
-    # user で fallback（出力の空チェックで判定）
+    # user で fallback
     gh api graphql -f query='{
       viewer {
         projectsV2(first: 10, orderBy: {field: UPDATED_AT, direction: DESC}) {
           nodes { title number }
         }
       }
-    }' --jq '.data.viewer.projectsV2.nodes[] | "- \(.title) (#\(.number))"' 2>/dev/null
+    }' 2>/dev/null | jq -r '.data.viewer.projectsV2.nodes[]? | "- \(.title) (#\(.number))"' 2>/dev/null
   fi
   echo ""
 fi
