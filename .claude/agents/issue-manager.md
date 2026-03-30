@@ -30,9 +30,11 @@ GitHub Issue のライフサイクルを管理する専門エージェント。
    - `--assignee`: ユーザー名
    - `--label`: フェーズラベル + 重要度ラベル（例: `"開発,重要度:中"`）
    - `--project`: プロジェクト名
-3. タイプ設定（GraphQL API）:
+3. タイプ設定（**org リポジトリのみ**）:
    - `gh api graphql -H "GraphQL-Features: issue_types"` でタイプ一覧取得
    - `updateIssueIssueType` mutation で Issue にタイプ設定
+   - **個人リポジトリでは Issue Types が使えないためスキップ**
+   - org か個人かは `gh repo view --json owner --jq '.owner.type'` で判定（`Organization` or `User`）
 4. 子 Issue の場合:
    - 本文に `Parent: #N` を記載
    - 親 Issue のアクションアイテムにチェックリストとして子を追加
