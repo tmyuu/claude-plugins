@@ -9,8 +9,8 @@ fi
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
-# gh issue create 以外は素通り
-if ! echo "$CMD" | grep -q 'gh issue create'; then
+# gh issue create 以外は素通り（git commit 内のテキスト等の誤検知を防止）
+if ! echo "$CMD" | grep -qE '^\s*gh\s+issue\s+create\b'; then
   exit 0
 fi
 

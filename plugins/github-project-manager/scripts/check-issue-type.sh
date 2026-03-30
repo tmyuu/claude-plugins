@@ -11,7 +11,7 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 RESPONSE=$(echo "$INPUT" | jq -r '.tool_response // ""' 2>/dev/null)
 
 # gh issue create 以外は素通り
-if ! echo "$CMD" | grep -q 'gh issue create'; then
+if ! echo "$CMD" | grep -qE '^\s*gh\s+issue\s+create\b'; then
   exit 0
 fi
 

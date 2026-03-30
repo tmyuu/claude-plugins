@@ -10,8 +10,8 @@ fi
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
-# git commit 以外は素通り
-if ! echo "$CMD" | grep -q 'git commit'; then
+# git commit 以外は素通り（gh issue create 等の誤検知を防止）
+if ! echo "$CMD" | grep -qE '^\s*git\s+commit\b'; then
   exit 0
 fi
 
