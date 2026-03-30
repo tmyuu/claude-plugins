@@ -20,13 +20,16 @@ STDOUT=$(echo "$INPUT" | jq -r '.tool_response.stdout // ""' 2>/dev/null)
 # --- Issue 番号の抽出 ---
 ISSUE_NUMS=""
 
+# 先頭行のみでコマンド種別を判定（コミットメッセージ内の文字列に誤反応しない）
+FIRST_LINE=$(echo "$CMD" | head -1)
+
 # gh issue close N
-if echo "$CMD" | grep -qE '^\s*gh\s+issue\s+close\b'; then
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+close\b'; then
   ISSUE_NUMS=$(echo "$CMD" | grep -oE 'gh\s+issue\s+close\s+([0-9]+)' | grep -oE '[0-9]+')
 fi
 
 # gh pr merge (成功後に紐づく Issue を取得)
-if echo "$CMD" | grep -qE '^\s*gh\s+pr\s+merge\b'; then
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+pr\s+merge\b'; then
   PR_NUM=$(echo "$CMD" | grep -oE 'gh\s+pr\s+merge\s+([0-9]+)' | grep -oE '[0-9]+')
   if [ -z "$PR_NUM" ]; then
     PR_NUM=$(gh pr view --json number --jq '.number' 2>/dev/null)

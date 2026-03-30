@@ -9,8 +9,9 @@ fi
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
-# --- gh issue close の検出 ---
-if echo "$CMD" | grep -qE '^\s*gh\s+issue\s+close\b'; then
+# --- gh issue close の検出（先頭行のみ判定し、コミットメッセージ内の文字列に誤反応しない） ---
+FIRST_LINE=$(echo "$CMD" | head -1)
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+close\b'; then
   # Issue 番号を取得
   ISSUE_NUM=$(echo "$CMD" | grep -oE 'gh\s+issue\s+close\s+([0-9]+)' | grep -oE '[0-9]+')
   if [ -z "$ISSUE_NUM" ]; then
@@ -42,7 +43,7 @@ FEEDBACK
 fi
 
 # --- gh pr merge の検出 ---
-if echo "$CMD" | grep -qE '^\s*gh\s+pr\s+merge\b'; then
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+pr\s+merge\b'; then
   # PR 番号を取得
   PR_NUM=$(echo "$CMD" | grep -oE 'gh\s+pr\s+merge\s+([0-9]+)' | grep -oE '[0-9]+')
 

@@ -9,8 +9,9 @@ fi
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
-# git commit 以外は素通り
-if ! echo "$CMD" | grep -qE '^\s*git\s+commit\b'; then
+# git commit 以外は素通り（先頭行のみ判定）
+FIRST_LINE=$(echo "$CMD" | head -1)
+if ! echo "$FIRST_LINE" | grep -qE '^\s*git\s+commit\b'; then
   exit 0
 fi
 

@@ -17,8 +17,9 @@ fi
 
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
-# gh issue close 以外は素通り
-if ! echo "$CMD" | grep -qE '^\s*gh\s+issue\s+close\b'; then
+# gh issue close 以外は素通り（先頭行のみ判定）
+FIRST_LINE=$(echo "$CMD" | head -1)
+if ! echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+close\b'; then
   exit 0
 fi
 

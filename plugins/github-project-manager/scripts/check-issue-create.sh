@@ -9,8 +9,9 @@ fi
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
-# gh issue create 以外は素通り（git commit 内のテキスト等の誤検知を防止）
-if ! echo "$CMD" | grep -qE '^\s*gh\s+issue\s+create\b'; then
+# gh issue create 以外は素通り（コミットメッセージ内の文字列に誤反応しないよう先頭行のみ判定）
+FIRST_LINE=$(echo "$CMD" | head -1)
+if ! echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+create\b'; then
   exit 0
 fi
 
