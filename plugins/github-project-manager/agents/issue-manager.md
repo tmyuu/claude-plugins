@@ -60,3 +60,27 @@ GitHub Issue のライフサイクルを管理する専門エージェント。
 - 可能な限り PR の `Closes #N` で自動クローズ
 - 手動クローズ前にユーザーに確認
 - 全アクションアイテムがチェック済みか検証
+
+## プロジェクト管理
+
+### プロジェクト作成時の注意
+GitHub Projects v2 はアカウントレベルで作成される。**リポジトリへのリンクが別途必要**。
+
+プロジェクト作成後は必ず:
+```
+gh api graphql -f query='
+mutation {
+  linkProjectV2ToRepository(input: {
+    projectId: "PROJECT_NODE_ID"
+    repositoryId: "REPO_NODE_ID"
+  }) {
+    repository { name }
+  }
+}'
+```
+
+リポジトリの node_id は `gh api repos/OWNER/REPO --jq '.node_id'` で取得。
+
+### プロジェクトに Issue を追加
+`gh issue create --project "プロジェクト名"` で Issue 作成時に自動追加。
+既存 Issue の追加は `addProjectV2ItemById` mutation を使用。
