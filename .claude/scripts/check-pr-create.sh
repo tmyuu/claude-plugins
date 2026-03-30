@@ -1,6 +1,6 @@
 #!/bin/bash
 # PreToolUse Hook: gh pr create に必須オプションがあるかチェック
-# --label, --assignee, Closes #N を検証
+# --label, --assignee, --project, Closes #N を検証
 # exit 0 = 続行, exit 2 = ブロック（stderr が Claude にフィードバックされ自己修正を促す）
 
 if ! command -v jq &>/dev/null; then
@@ -26,6 +26,11 @@ fi
 # --assignee チェック
 if ! echo "$CMD" | grep -qE '\-\-assignee'; then
   ERRORS="${ERRORS}--assignee が指定されていません。\n  gh api user --jq '.login' でユーザー名を取得し、--assignee に設定してください。\n\n"
+fi
+
+# --project チェック（Issue と同じプロジェクトに紐付け）
+if ! echo "$CMD" | grep -qE '\-\-project'; then
+  ERRORS="${ERRORS}--project が指定されていません。対応 Issue と同じプロジェクトに紐付けてください。\n  SessionStart で注入された「プロジェクト」一覧から該当プロジェクトを指定してください。\n\n"
 fi
 
 # Closes #N チェック（--body 内に含まれているか）
