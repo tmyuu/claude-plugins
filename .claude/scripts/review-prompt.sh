@@ -33,6 +33,68 @@ ${OPEN_ISSUES:-（なし）}
 GUIDANCE
 elif [ -n "$BRANCH_ISSUE" ]; then
   # feature ブランチ: Issue 確定済み
+
+  # --- ステータス自動遷移: Todo → In Progress（セッション内1回だけ実行） ---
+  STATUS_MARKER="/tmp/.claude-status-updated-${BRANCH_ISSUE}"
+  if [ ! -f "$STATUS_MARKER" ]; then
+  REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null)
+  OWNER=$(echo "$REPO" | cut -d'/' -f1)
+  REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
+  if [ -n "$OWNER" ] && [ -n "$REPO_NAME" ]; then
+    ITEM_INFO=$(gh api graphql -f query='
+      query($owner: String!, $repo: String!, $number: Int!) {
+        repository(owner: $owner, name: $repo) {
+          issue(number: $number) {
+            projectItems(first: 5) {
+              nodes {
+                id
+                project { id }
+                fieldValueByName(name: "Status") {
+                  ... on ProjectV2ItemFieldSingleSelectValue { name }
+                }
+              }
+            }
+          }
+        }
+      }
+    ' -f owner="$OWNER" -f repo="$REPO_NAME" -F number="$BRANCH_ISSUE" 2>/dev/null)
+
+    echo "$ITEM_INFO" | jq -r '.data.repository.issue.projectItems.nodes[]? | select(.fieldValueByName.name == "Todo") | .id + "|" + .project.id' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID; do
+      if [ -z "$ITEM_ID" ] || [ -z "$PROJECT_ID" ]; then
+        continue
+      fi
+      FIELD_INFO=$(gh api graphql -f query='
+        query($projectId: ID!) {
+          node(id: $projectId) {
+            ... on ProjectV2 {
+              field(name: "Status") {
+                ... on ProjectV2SingleSelectField {
+                  id
+                  options { id name }
+                }
+              }
+            }
+          }
+        }
+      ' -f projectId="$PROJECT_ID" 2>/dev/null)
+      FIELD_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.id // ""' 2>/dev/null)
+      IP_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.options[]? | select(.name == "In Progress") | .id' 2>/dev/null)
+      if [ -n "$FIELD_ID" ] && [ -n "$IP_ID" ]; then
+        gh api graphql -f query='
+          mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+            updateProjectV2ItemFieldValue(input: {
+              projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+              value: { singleSelectOptionId: $optionId }
+            }) { projectV2Item { id } }
+          }
+        ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$IP_ID" 2>/dev/null
+        echo "Issue #${BRANCH_ISSUE} のステータスを Todo → In Progress に自動更新しました。" >&2
+      fi
+    done
+  fi
+  touch "$STATUS_MARKER"
+  fi
+
   # Issue のチェックリスト状態を取得
   ISSUE_BODY=$(gh issue view "$BRANCH_ISSUE" --json body,title --jq '.title + "\n" + .body' 2>/dev/null)
   UNCHECKED=$(echo "$ISSUE_BODY" | grep -cE '^\s*- \[ \]' 2>/dev/null || echo "0")
