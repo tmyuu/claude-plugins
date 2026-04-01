@@ -3,6 +3,9 @@ name: issue-manager
 description: "GitHub Issue の作成・更新・ステータス管理・アクションアイテム更新を行う。/new-issue や /update-issue の実行時、または Issue 関連の作業が必要な時に使用する。"
 tools: ["Bash", "Read", "Grep", "Glob"]
 skills: ["issue-lifecycle"]
+permissionMode: bypassPermissions
+maxTurns: 20
+model: sonnet
 ---
 
 # Issue Manager
