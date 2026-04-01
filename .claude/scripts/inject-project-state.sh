@@ -30,115 +30,74 @@ fi
 OWNER=$(echo "$REPO" | cut -d'/' -f1)
 REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
-# === プロジェクト（全件: Open / Closed 両方） ===
+# === プロジェクト（1回の GraphQL で全件取得: Open / Closed 両方） ===
 if [ -n "$OWNER" ]; then
   echo "### プロジェクト"
 
-  # プロジェクト一覧を取得（org → user fallback）
-  ORG_RAW=$(gh api graphql -f query='{
-    organization(login: "'"$OWNER"'") {
+  # 全プロジェクトの詳細を1回のクエリで取得（org → user fallback）
+  # items + repositories を含めることで N+1 問題を回避
+  PROJECT_QUERY='
+    {
       projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
-        nodes { title number id closed }
-      }
-    }
-  }' 2>/dev/null)
-  PROJECTS_JSON=$(echo "$ORG_RAW" | jq '.data.organization.projectsV2.nodes // empty' 2>/dev/null)
-
-  if [ -z "$PROJECTS_JSON" ] || [ "$PROJECTS_JSON" = "null" ]; then
-    PROJECTS_JSON=$(gh api graphql -f query='{
-      viewer {
-        projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
-          nodes { title number id closed }
-        }
-      }
-    }' 2>/dev/null | jq '.data.viewer.projectsV2.nodes // []' 2>/dev/null)
-  fi
-
-  if [ -n "$PROJECTS_JSON" ] && [ "$PROJECTS_JSON" != "null" ] && [ "$PROJECTS_JSON" != "[]" ]; then
-    echo "$PROJECTS_JSON" | jq -r '.[] | "\(.id)|\(.title)|\(.number)|\(.closed)"' 2>/dev/null | while IFS='|' read -r PROJECT_ID TITLE NUMBER CLOSED; do
-      if [ -z "$PROJECT_ID" ]; then
-        continue
-      fi
-
-      # 1回の GraphQL でアイテム（Issue 状態含む）+ リポリンクを取得
-      PROJECT_DETAIL=$(gh api graphql -f query='
-        query($projectId: ID!) {
-          node(id: $projectId) {
-            ... on ProjectV2 {
-              repositories(first: 50) {
-                nodes { nameWithOwner }
+        nodes {
+          title number id closed
+          repositories(first: 50) {
+            nodes { nameWithOwner }
+          }
+          items(first: 100) {
+            nodes {
+              fieldValueByName(name: "Status") {
+                ... on ProjectV2ItemFieldSingleSelectValue { name }
               }
-              items(first: 100) {
-                nodes {
-                  fieldValueByName(name: "Status") {
-                    ... on ProjectV2ItemFieldSingleSelectValue {
-                      name
-                    }
-                  }
-                  content {
-                    ... on Issue {
-                      number
-                      state
-                      repository { nameWithOwner }
-                    }
-                  }
+              content {
+                ... on Issue {
+                  number state
+                  repository { nameWithOwner }
                 }
               }
             }
           }
         }
-      ' -f projectId="$PROJECT_ID" 2>/dev/null)
+      }
+    }'
 
-      # リポリンク状態
-      REPO_LINKED=$(echo "$PROJECT_DETAIL" | jq -r ".data.node.repositories.nodes[]? | select(.nameWithOwner == \"$REPO\") | .nameWithOwner" 2>/dev/null)
-      if [ -n "$REPO_LINKED" ]; then
-        LINK_STATUS="リポリンク:✓"
-      else
-        LINK_STATUS="リポリンク:✗"
-      fi
+  PROJECTS_RAW=$(gh api graphql -f query="{
+    organization(login: \"$OWNER\") $PROJECT_QUERY
+  }" 2>/dev/null)
+  PROJECTS_JSON=$(echo "$PROJECTS_RAW" | jq '.data.organization.projectsV2.nodes // empty' 2>/dev/null)
 
-      # このリポジトリのアイテムのみ集計
-      REPO_ITEMS=$(echo "$PROJECT_DETAIL" | jq "[.data.node.items.nodes[] | select(.content.repository.nameWithOwner == \"$REPO\")]" 2>/dev/null)
-      TOTAL=$(echo "$REPO_ITEMS" | jq 'length' 2>/dev/null)
-      DONE=$(echo "$REPO_ITEMS" | jq '[.[] | select(.fieldValueByName.name == "Done")] | length' 2>/dev/null)
-      IN_PROGRESS=$(echo "$REPO_ITEMS" | jq '[.[] | select(.fieldValueByName.name == "In Progress")] | length' 2>/dev/null)
-      TODO=$(echo "$REPO_ITEMS" | jq '[.[] | select(.fieldValueByName.name == "Todo")] | length' 2>/dev/null)
+  if [ -z "$PROJECTS_JSON" ] || [ "$PROJECTS_JSON" = "null" ]; then
+    PROJECTS_RAW=$(gh api graphql -f query="{
+      viewer $PROJECT_QUERY
+    }" 2>/dev/null)
+    PROJECTS_JSON=$(echo "$PROJECTS_RAW" | jq '.data.viewer.projectsV2.nodes // []' 2>/dev/null)
+  fi
 
-      TOTAL=${TOTAL:-0}
-      DONE=${DONE:-0}
-      IN_PROGRESS=${IN_PROGRESS:-0}
-      TODO=${TODO:-0}
-
-      # プロジェクト状態マーカー
-      if [ "$CLOSED" = "true" ]; then
-        STATE_MARKER="[Closed]"
-      else
-        STATE_MARKER="[Open]"
-      fi
-
+  if [ -n "$PROJECTS_JSON" ] && [ "$PROJECTS_JSON" != "null" ] && [ "$PROJECTS_JSON" != "[]" ]; then
+    echo "$PROJECTS_JSON" | jq -r --arg repo "$REPO" '
+      .[] |
+      # リポリンク判定
+      (if (.repositories.nodes // [] | map(select(.nameWithOwner == $repo)) | length) > 0 then "✓" else "✗" end) as $link |
+      # このリポジトリのアイテムのみ
+      ([.items.nodes[] | select(.content.repository.nameWithOwner == $repo)]) as $items |
+      ($items | length) as $total |
+      ([$items[] | select(.fieldValueByName.name == "Done")] | length) as $done |
+      ([$items[] | select(.fieldValueByName.name == "In Progress")] | length) as $in_progress |
+      ([$items[] | select(.fieldValueByName.name == "Todo")] | length) as $todo |
+      (if .closed then "[Closed]" else "[Open]" end) as $state |
       # サマリー行
-      if [ "$TOTAL" -eq 0 ]; then
-        echo "- ${TITLE} (#${NUMBER}) ${STATE_MARKER} — アイテムなし | ${LINK_STATUS}"
-      elif [ "$TOTAL" -eq "$DONE" ] && [ "$TOTAL" -gt 0 ]; then
-        echo "- ${TITLE} (#${NUMBER}) ${STATE_MARKER} — ${DONE}/${TOTAL} Done 全完了 | ${LINK_STATUS}"
+      (if $total == 0 then
+        "- \(.title) (#\(.number)) \($state) — アイテムなし | リポリンク:\($link)"
+      elif $total == $done and $total > 0 then
+        "- \(.title) (#\(.number)) \($state) — \($done)/\($total) Done 全完了 | リポリンク:\($link)"
       else
-        echo "- ${TITLE} (#${NUMBER}) ${STATE_MARKER} — ${DONE}/${TOTAL} Done, ${IN_PROGRESS} In Progress, ${TODO} Todo | ${LINK_STATUS}"
-      fi
-
-      # ステータス異常の検出（データとして出力、判断は Claude に委ねる）
-      # Open Issue なのに Status が Done
-      OPEN_DONE=$(echo "$REPO_ITEMS" | jq -r '.[] | select(.content.state == "OPEN" and .fieldValueByName.name == "Done") | "  - Issue #\(.content.number) [Open] Status:Done"' 2>/dev/null)
-      if [ -n "$OPEN_DONE" ]; then
-        echo "$OPEN_DONE"
-      fi
-
-      # Closed Issue なのに Status が Done 以外
-      CLOSED_NOT_DONE=$(echo "$REPO_ITEMS" | jq -r '.[] | select(.content.state == "CLOSED" and .fieldValueByName.name != "Done" and .fieldValueByName.name != null and .fieldValueByName.name != "") | "  - Issue #\(.content.number) [Closed] Status:\(.fieldValueByName.name)"' 2>/dev/null)
-      if [ -n "$CLOSED_NOT_DONE" ]; then
-        echo "$CLOSED_NOT_DONE"
-      fi
-
-    done
+        "- \(.title) (#\(.number)) \($state) — \($done)/\($total) Done, \($in_progress) In Progress, \($todo) Todo | リポリンク:\($link)"
+      end),
+      # ステータス異常: Open Issue なのに Done
+      ($items[] | select(.content.state == "OPEN" and .fieldValueByName.name == "Done") | "  - Issue #\(.content.number) [Open] Status:Done"),
+      # ステータス異常: Closed Issue なのに Done 以外
+      ($items[] | select(.content.state == "CLOSED" and .fieldValueByName.name != "Done" and .fieldValueByName.name != null and .fieldValueByName.name != "") | "  - Issue #\(.content.number) [Closed] Status:\(.fieldValueByName.name)")
+    ' 2>/dev/null
   else
     echo "（プロジェクトなし）"
   fi
