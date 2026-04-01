@@ -1,7 +1,10 @@
 {
   "name": "github-project-manager",
-  "version": "0.2.0",
-  "description": "GitHub プロジェクト管理プラグイン — Issue ライフサイクルの自動化、ステータス管理、コミットガードレール",
-  "author": "tmyuu",
-  "repository": "https://github.com/tmyuu/claude-plugins"
+  "version": "2.0.0",
+  "description": "GitHub Issue/Project ライフサイクルを自動管理。整合性監査・ステータス自動更新・チェックリスト連動を提供。",
+  "author": {
+    "name": "tmyuu"
+  },
+  "repository": "https://github.com/tmyuu/claude-plugins",
+  "license": "MIT"
 }

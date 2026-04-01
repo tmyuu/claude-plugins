@@ -6,7 +6,8 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/inject-project-state.sh",
-            "timeout": 15
+            "timeout": 15,
+            "statusMessage": "プロジェクト状態を取得中..."
           }
         ]
       }
@@ -17,7 +18,8 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/review-prompt.sh",
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "ワークフロー確認中..."
           }
         ]
       }
