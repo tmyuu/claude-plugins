@@ -38,18 +38,23 @@ elif [ -n "$BRANCH_ISSUE" ]; then
   UNCHECKED=$(echo "$ISSUE_BODY" | grep -cE '^\s*- \[ \]' 2>/dev/null || echo "0")
   CHECKED=$(echo "$ISSUE_BODY" | grep -cE '^\s*- \[x\]' 2>/dev/null || echo "0")
   ISSUE_TITLE=$(echo "$ISSUE_BODY" | head -1)
+  UNCHECKED_ITEMS=$(echo "$ISSUE_BODY" | grep -E '^\s*- \[ \]' 2>/dev/null)
 
-  cat <<GUIDANCE
-## ワークフローリマインド
-
-対応 Issue: **#${BRANCH_ISSUE}** ${ISSUE_TITLE}
-チェックリスト: ${CHECKED} 完了 / ${UNCHECKED} 残り
-
-作業中の注意:
-- アクションアイテムを完了したら **/update-issue** でチェックリストを更新
-- コミットメッセージに **#${BRANCH_ISSUE}** を含める
-- PR 作成時は **Closes #${BRANCH_ISSUE}** を記載
-GUIDANCE
+  echo "## ワークフローリマインド"
+  echo ""
+  echo "対応 Issue: **#${BRANCH_ISSUE}** ${ISSUE_TITLE}"
+  echo "${CHECKED} 完了 / ${UNCHECKED} 残り"
+  echo ""
+  if [ -n "$UNCHECKED_ITEMS" ] && [ "$UNCHECKED" -gt 0 ]; then
+    echo "未完了:"
+    echo "$UNCHECKED_ITEMS"
+    echo ""
+    echo "完了した項目があれば **/update-issue** でチェックリストを更新すること。"
+  fi
+  echo ""
+  echo "作業中の注意:"
+  echo "- コミットメッセージに **#${BRANCH_ISSUE}** を含める"
+  echo "- PR 作成時は **Closes #${BRANCH_ISSUE}** を記載"
 else
   # feature ブランチだが Issue 番号なし
   cat <<GUIDANCE
