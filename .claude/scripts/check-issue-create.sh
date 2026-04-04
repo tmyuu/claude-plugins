@@ -41,6 +41,72 @@ if [ -n "$ERRORS" ]; then
   exit 2
 fi
 
+# --project の値がリポジトリにリンクされたプロジェクトか検証
+PROJECT_NAME=$(echo "$CMD" | grep -oE '\-\-project\s+"[^"]+"' | sed 's/--project[[:space:]]*//' | tr -d '"')
+if [ -z "$PROJECT_NAME" ]; then
+  PROJECT_NAME=$(echo "$CMD" | grep -oE "\-\-project\s+'[^']+'" | sed "s/--project[[:space:]]*//" | tr -d "'")
+fi
+if [ -z "$PROJECT_NAME" ]; then
+  PROJECT_NAME=$(echo "$CMD" | grep -oE '\-\-project\s+[^ ]+' | sed 's/--project[[:space:]]*//')
+fi
+
+if [ -n "$PROJECT_NAME" ]; then
+  REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null)
+  OWNER=$(echo "$REPO" | cut -d'/' -f1)
+
+  # プロジェクト一覧 + リポリンクを取得（org → user fallback）
+  PROJECTS_RAW=$(gh api graphql -f query="{
+    organization(login: \"$OWNER\") {
+      projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+        nodes {
+          title
+          closed
+          repositories(first: 50) { nodes { nameWithOwner } }
+        }
+      }
+    }
+  }" 2>/dev/null)
+  PROJECTS_JSON=$(echo "$PROJECTS_RAW" | jq '.data.organization.projectsV2.nodes // empty' 2>/dev/null)
+
+  if [ -z "$PROJECTS_JSON" ] || [ "$PROJECTS_JSON" = "null" ]; then
+    PROJECTS_RAW=$(gh api graphql -f query="{
+      viewer {
+        projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+          nodes {
+            title
+            closed
+            repositories(first: 50) { nodes { nameWithOwner } }
+          }
+        }
+      }
+    }" 2>/dev/null)
+    PROJECTS_JSON=$(echo "$PROJECTS_RAW" | jq '.data.viewer.projectsV2.nodes // []' 2>/dev/null)
+  fi
+
+  # 指定プロジェクトがリポジトリにリンクされているか確認
+  LINKED=$(echo "$PROJECTS_JSON" | jq -r --arg name "$PROJECT_NAME" --arg repo "$REPO" \
+    '.[] | select(.title == $name and .closed == false) | .repositories.nodes[]? | select(.nameWithOwner == $repo) | .nameWithOwner' 2>/dev/null)
+
+  if [ -z "$LINKED" ]; then
+    # リポジトリにリンクされたプロジェクト一覧を取得
+    LINKED_PROJECTS=$(echo "$PROJECTS_JSON" | jq -r --arg repo "$REPO" \
+      '.[] | select(.closed == false) | select(.repositories.nodes[]?.nameWithOwner == $repo) | "  - \(.title)"' 2>/dev/null)
+
+    cat >&2 <<FEEDBACK
+プロジェクト「${PROJECT_NAME}」はこのリポジトリにリンクされていません。
+
+リポリンク済みのプロジェクト:
+${LINKED_PROJECTS:-  （なし — ユーザーにどのプロジェクトを使うか確認してください）}
+
+対応方法:
+1. 上記のリンク済みプロジェクトから選んでください
+2. リンクされていないプロジェクトを使う場合は linkProjectV2ToRepository で先にリンク
+3. 該当するプロジェクトがない場合はユーザーに確認
+FEEDBACK
+    exit 2
+  fi
+fi
+
 # 通過する場合もリマインド（stdout で注入）
 echo "✓ Issue 作成チェック通過。重複 Issue がないことを確認済みですか？"
 
