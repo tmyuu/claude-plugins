@@ -80,13 +80,13 @@ for ISSUE_NUM in $ISSUE_NUMS; do
     continue
   fi
 
-  # ステータスが Done 以外のアイテムを更新
-  echo "$ITEM_INFO" | jq -r '.data.repository.issue.projectItems.nodes[]? | select(.fieldValueByName.name != "Done") | .id + "|" + .project.id' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID; do
+  # ステータスが Done 以外のアイテムを更新（Todo → In Progress → Done の2段階遷移対応）
+  echo "$ITEM_INFO" | jq -r '.data.repository.issue.projectItems.nodes[]? | select(.fieldValueByName.name != "Done") | .id + "|" + .project.id + "|" + (.fieldValueByName.name // "")' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID CURRENT_STATUS; do
     if [ -z "$ITEM_ID" ] || [ -z "$PROJECT_ID" ]; then
       continue
     fi
 
-    # Status フィールドの ID と "Done" オプション ID を取得
+    # Status フィールドの ID と各オプション ID を取得
     FIELD_INFO=$(gh api graphql -f query='
       query($projectId: ID!) {
         node(id: $projectId) {
@@ -104,9 +104,26 @@ for ISSUE_NUM in $ISSUE_NUMS; do
 
     FIELD_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.id // ""' 2>/dev/null)
     DONE_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.options[]? | select(.name == "Done") | .id' 2>/dev/null)
+    IN_PROGRESS_ID=$(echo "$FIELD_INFO" | jq -r '.data.node.field.options[]? | select(.name == "In Progress") | .id' 2>/dev/null)
 
     if [ -z "$FIELD_ID" ] || [ -z "$DONE_ID" ]; then
       continue
+    fi
+
+    # Todo の場合は In Progress を経由してから Done に遷移
+    if [ "$CURRENT_STATUS" = "Todo" ] && [ -n "$IN_PROGRESS_ID" ]; then
+      gh api graphql -f query='
+        mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+          updateProjectV2ItemFieldValue(input: {
+            projectId: $projectId
+            itemId: $itemId
+            fieldId: $fieldId
+            value: { singleSelectOptionId: $optionId }
+          }) {
+            projectV2Item { id }
+          }
+        }
+      ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$IN_PROGRESS_ID" 2>/dev/null
     fi
 
     # ステータスを Done に更新
@@ -123,7 +140,11 @@ for ISSUE_NUM in $ISSUE_NUMS; do
       }
     ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$DONE_ID" 2>/dev/null
 
-    UPDATED_ISSUES="${UPDATED_ISSUES} #${ISSUE_NUM}"
+    if [ "$CURRENT_STATUS" = "Todo" ]; then
+      UPDATED_ISSUES="${UPDATED_ISSUES} #${ISSUE_NUM}(Todo→In Progress→Done)"
+    else
+      UPDATED_ISSUES="${UPDATED_ISSUES} #${ISSUE_NUM}"
+    fi
   done
 done
 

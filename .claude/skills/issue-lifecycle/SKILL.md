@@ -28,7 +28,7 @@ user-invocable: false
 
 ## Issue 更新
 
-- ステータスは作業状態に応じて正確に切り替える（Todo → In Progress → Done）
+- ステータス遷移（Todo → In Progress → Done）は hook で自動管理される
 - 子 Issue をクローズしたら、親 Issue のアクションアイテムも `- [x]` に更新する
 - 子 Issue のクローズと親のチェック更新は**セットで行う**
 
