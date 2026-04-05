@@ -1,7 +1,8 @@
 #!/bin/bash
-# PreToolUse Hook: プロジェクト新規作成時に既存プロジェクトを提示しリマインド
-# 既存プロジェクトのテーマに合うならそちらを使うべき。逸脱時のみ新規作成。
-# exit 0 常時（リマインド型）
+# PreToolUse Hook: プロジェクト新規作成をブロック
+# Webhook でリポジトリ紐付けを検知できないため、Claude からの作成は禁止。
+# プロジェクトは人間が GitHub UI で作成し、リポジトリにリンクする。
+# exit 0 = 続行, exit 2 = ブロック
 
 if ! command -v jq &>/dev/null; then
   exit 0
@@ -12,50 +13,27 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
 FIRST_LINE=$(echo "$CMD" | head -1)
 
-# gh project create / createProjectV2 以外は素通り
-if ! echo "$FIRST_LINE" | grep -qE '(gh\s+project\s+create|createProjectV2)'; then
-  exit 0
+# gh project create をブロック
+if echo "$FIRST_LINE" | grep -qE '^\s*gh\s+project\s+create\b'; then
+  cat >&2 <<FEEDBACK
+プロジェクトの新規作成はブロックされました。
+
+理由: プロジェクト作成→リポジトリ紐付けが Webhook で検知できないため、
+Claude からのプロジェクト作成は禁止しています。
+
+プロジェクトはユーザーが GitHub UI で作成してください。
+既存プロジェクトは SessionStart で注入された一覧を確認してください。
+FEEDBACK
+  exit 2
 fi
 
-# リポジトリにリンクされた既存プロジェクトを取得
-REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null)
-OWNER=$(echo "$REPO" | cut -d'/' -f1)
-
-PROJECTS_JSON=$(gh api graphql -f query="{
-  organization(login: \"$OWNER\") {
-    projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
-      nodes { title closed repositories(first: 50) { nodes { nameWithOwner } } }
-    }
-  }
-}" 2>/dev/null | jq '.data.organization.projectsV2.nodes // empty' 2>/dev/null)
-
-if [ -z "$PROJECTS_JSON" ] || [ "$PROJECTS_JSON" = "null" ]; then
-  PROJECTS_JSON=$(gh api graphql -f query="{
-    viewer {
-      projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
-        nodes { title closed repositories(first: 50) { nodes { nameWithOwner } } }
-      }
-    }
-  }" 2>/dev/null | jq '.data.viewer.projectsV2.nodes // []' 2>/dev/null)
-fi
-
-LINKED=$(echo "$PROJECTS_JSON" | jq -r --arg repo "$REPO" \
-  '.[] | select(.closed == false) | select(.repositories.nodes[]?.nameWithOwner == $repo) | "  - \(.title)"' 2>/dev/null)
-
-if [ -n "$LINKED" ]; then
-  cat <<REMINDER
-⚠ このリポジトリには既にプロジェクトがリンクされています:
-${LINKED}
-
-既存プロジェクトのテーマに合う場合はそちらを使ってください。
-テーマが明らかに逸脱している場合のみ新規作成してください。
-新規作成後は必ず linkProjectV2ToRepository でリポジトリにリンクすること。
-REMINDER
-else
-  cat <<REMINDER
-このリポジトリにリンクされたプロジェクトはありません。
-新規作成後は必ず linkProjectV2ToRepository でリポジトリにリンクしてください。
-REMINDER
+# GraphQL の createProjectV2 mutation もブロック
+if echo "$FIRST_LINE" | grep -qE 'createProjectV2'; then
+  cat >&2 <<FEEDBACK
+GraphQL によるプロジェクト新規作成はブロックされました。
+プロジェクトはユーザーが GitHub UI で作成してください。
+FEEDBACK
+  exit 2
 fi
 
 exit 0
