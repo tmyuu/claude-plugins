@@ -1,5 +1,6 @@
 #!/bin/bash
-# PostToolUse Hook: gh issue create 成功後にプロジェクトステータスを Todo に自動設定
+# PostToolUse Hook: gh issue create 成功後にプロジェクトステータスを自動設定
+# デフォルトは Todo、コマンド内に CLAUDE_ISSUE_STATUS=in_progress が含まれていれば In Progress
 # ステータスが未設定（空）のアイテムのみ対象
 # exit 0 常時
 
@@ -13,8 +14,14 @@ RESPONSE=$(echo "$INPUT" | jq -r '.tool_response // ""' 2>/dev/null)
 
 # gh issue create 以外は素通り
 FIRST_LINE=$(echo "$CMD" | head -1)
-if ! echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+create\b'; then
+if ! echo "$FIRST_LINE" | grep -qE '^\s*(CLAUDE_ISSUE_STATUS=\S+\s+)?gh\s+issue\s+create\b'; then
   exit 0
+fi
+
+# コマンドプレフィックスから意図を抽出: CLAUDE_ISSUE_STATUS=in_progress gh issue create ...
+TARGET_STATUS="Todo"
+if echo "$CMD" | grep -qE 'CLAUDE_ISSUE_STATUS=in_progress\b'; then
+  TARGET_STATUS="In Progress"
 fi
 
 # Issue URL を抽出（stdout から）
@@ -59,13 +66,13 @@ if [ -z "$ITEM_INFO" ]; then
   exit 0
 fi
 
-# ステータスが未設定（null/空）のアイテムに Todo を設定
-echo "$ITEM_INFO" | jq -r '
+# ステータスが未設定（null/空）のアイテムに目的ステータスを設定
+echo "$ITEM_INFO" | jq -r --arg target "$TARGET_STATUS" '
   .data.repository.issue.projectItems.nodes[]?
   | select(.fieldValueByName.name == null or .fieldValueByName.name == "")
-  | .id + "|" + .project.id + "|" + .project.field.id + "|" + (.project.field.options[]? | select(.name == "Todo") | .id)
-' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID FIELD_ID TODO_ID; do
-  if [ -z "$ITEM_ID" ] || [ -z "$FIELD_ID" ] || [ -z "$TODO_ID" ]; then
+  | .id + "|" + .project.id + "|" + .project.field.id + "|" + (.project.field.options[]? | select(.name == $target) | .id)
+' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID FIELD_ID OPTION_ID; do
+  if [ -z "$ITEM_ID" ] || [ -z "$FIELD_ID" ] || [ -z "$OPTION_ID" ]; then
     continue
   fi
 
@@ -76,9 +83,9 @@ echo "$ITEM_INFO" | jq -r '
         value: { singleSelectOptionId: $optionId }
       }) { projectV2Item { id } }
     }
-  ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$TODO_ID" 2>/dev/null
+  ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$OPTION_ID" 2>/dev/null
 
-  echo "Issue #${ISSUE_NUM} のプロジェクトステータスを Todo に設定しました。"
+  echo "Issue #${ISSUE_NUM} のプロジェクトステータスを ${TARGET_STATUS} に設定しました。"
 done
 
 exit 0

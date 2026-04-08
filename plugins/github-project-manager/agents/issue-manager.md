@@ -46,7 +46,16 @@ GitHub Issue のライフサイクルを管理する専門エージェント。
    - `updateIssueIssueType` mutation で Issue にタイプ設定
    - **個人リポジトリでは Issue Types が使えないためスキップ**
    - org か個人かは `gh repo view --json owner --jq '.owner.type'` で判定（`Organization` or `User`）
-4. 子 Issue の場合:
+4. プロジェクトステータス設定（**`--project` で追加しただけではステータスが空のまま**）:
+   - 作成した Issue のプロジェクトアイテム ID を取得:
+     ```bash
+     gh api graphql -f query='{ repository(owner: "OWNER", name: "REPO") { issue(number: N) { projectItems(first: 5) { nodes { id project { id title field(name: "Status") { ... on ProjectV2SingleSelectField { id options { id name } } } } } } } } }'
+     ```
+   - `updateProjectV2ItemFieldValue` mutation でステータスを **Todo** に設定:
+     ```bash
+     gh api graphql -f query='mutation { updateProjectV2ItemFieldValue(input: { projectId: "PROJECT_ID" itemId: "ITEM_ID" fieldId: "STATUS_FIELD_ID" value: { singleSelectOptionId: "TODO_OPTION_ID" } }) { projectV2Item { id } } }'
+     ```
+5. 子 Issue の場合:
    - **GitHub Sub-issues（relationships）で親子関係を設定**（`Parent: #N` テキストは使わない）
    - 作成後に `gh api repos/{owner}/{repo}/issues/{parent}/sub_issues -F sub_issue_id={child_id}` で紐付け
    - `child_id` は `gh api repos/{owner}/{repo}/issues/{child} --jq '.id'` で取得（database ID）

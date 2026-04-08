@@ -35,9 +35,22 @@ GitHub Issue のライフサイクルを管理する専門エージェント。
 - **完了条件**: 何をもって完了とするか（チェック可能な条件）
 - **アクションアイテム**: チェックリスト形式で作業を分解
 
+### ステータス意図判断（作成時）
+ユーザーの指示から Todo か In Progress かを判断:
+- **In Progress で作成**: 「すぐ作業」「今から実装」「〜して（動詞）」等、即時着手の意図
+- **Todo で作成**: 「あとで」「Issue だけ立てて」「記録として」「整理しておいて」等、後回しの意図
+- **デフォルト**: Todo
+- `/new-issue --now` / `--later` の明示フラグがあればそれに従う
+
+In Progress で作成する場合、コマンドに環境変数プレフィックスを付ける:
+```
+CLAUDE_ISSUE_STATUS=in_progress gh issue create ...
+```
+これで `auto-set-todo-status.sh` が In Progress に設定する。
+
 ### 必須設定手順
 1. `gh api user --jq '.login'` でユーザー名取得
-2. `gh issue create` で Issue 作成
+2. `gh issue create` で Issue 作成（意図に応じて `CLAUDE_ISSUE_STATUS=in_progress` を付与）
    - `--assignee`: ユーザー名
    - `--label`: フェーズラベル + 重要度ラベル（例: `"開発,重要度:中"`）
    - `--project`: プロジェクト名
@@ -51,6 +64,19 @@ GitHub Issue のライフサイクルを管理する専門エージェント。
    - 作成後に `gh api repos/{owner}/{repo}/issues/{parent}/sub_issues -F sub_issue_id={child_id}` で紐付け
    - `child_id` は `gh api repos/{owner}/{repo}/issues/{child} --jq '.id'` で取得（database ID）
    - 親 Issue のアクションアイテムにチェックリストとして子を追加
+
+## 並列実行
+
+以下のタスクは並列実行すること（時間短縮）:
+
+- **独立した子 Issue の作成**: `Agent(subagent_type: "issue-manager", run_in_background: true)` で並列起動
+- **複数リポジトリへのファイル展開**: `.claude/scripts/deploy-plugin.sh` を使用（内部で xargs -P で並列）
+- **独立した調査タスク**: Explore エージェントを複数並列で起動
+- **互いに依存しない GitHub API 呼び出し**: 単一メッセージで複数 Bash ツール呼び出し
+
+**並列化しないもの:**
+- 依存関係のある順次操作（create → link → configure など）
+- 共有リソースへの書き込み（同じファイルの編集など）
 
 ## Issue 更新
 

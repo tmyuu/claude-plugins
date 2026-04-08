@@ -2,33 +2,23 @@
 description: "GitHub Issue をルールに従って作成する。タイトルはクライアント向け、内容は経緯が追えるように。"
 ---
 
-issue-manager エージェントに委譲して、以下のルールに従い Issue を作成してください。
+issue-manager エージェントに委譲して、Issue を作成してください。
 
 ## 作成内容
 
 $ARGUMENTS
 
-## ルール
+## ステータス判断ルール
 
-### タイトル
-- クライアントが読むものとして書く（技術用語を最小限に）
-- 何をするかを端的に表現
-- 良い例: 「LINE連携: Webhook設定・UX改善」「顧客ダッシュボードに月次レポート追加」
-- 悪い例: 「fix: webhook HMAC validation error」「refactor: extract useAuth hook」
+引数に `--now` が含まれる場合: **In Progress** で作成
+- `CLAUDE_ISSUE_STATUS=in_progress gh issue create ...` で実行
 
-### 内容
-後から見返して経緯がわかるように:
-- **背景**: なぜこの作業が必要か
-- **目的**: 何を達成するか
-- **完了条件**: 何をもって完了とするか
-- アクションアイテムがあればチェックリスト形式で記載
+引数に `--later` が含まれる場合: **Todo** で作成
+- 通常の `gh issue create ...` で実行
 
-### 必須設定
-1. `gh api user --jq '.login'` でアサイン
-2. フェーズラベル + 重要度ラベル（`--label "開発,重要度:中"` 等）
-3. プロジェクト紐付け（`--project` で該当プロジェクトに追加）
-4. タイプ設定（`gh api graphql` で Issue Type 設定）
+どちらもない場合: **ユーザーの意図を推論**
+- 「すぐ作業」「今から実装」「〜して」等 → In Progress
+- 「あとで」「Issue だけ立てて」「記録として」等 → Todo
+- 不明な場合はデフォルト Todo
 
-### 親子関係（該当する場合）
-- 子 Issue の本文に `Parent: #N` を記載
-- 親 Issue のアクションアイテムに子をチェックリストとして追加
+詳細ルールは issue-lifecycle Skill と issue-manager エージェントの定義を参照。
