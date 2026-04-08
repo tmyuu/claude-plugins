@@ -102,11 +102,6 @@
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-update-issue-status.sh",
-            "timeout": 15
-          },
-          {
-            "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-done-status.sh",
             "timeout": 15
           },
