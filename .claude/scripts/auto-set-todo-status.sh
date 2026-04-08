@@ -1,7 +1,10 @@
 #!/bin/bash
-# PostToolUse Hook: gh issue create 成功後にプロジェクトステータスを自動設定
-# デフォルトは Todo、コマンド内に CLAUDE_ISSUE_STATUS=in_progress が含まれていれば In Progress
-# ステータスが未設定（空）のアイテムのみ対象
+# PostToolUse Hook: gh issue create 成功後にプロジェクトへの追加 + ステータス設定を能動的に実行
+# 1. コマンドの --project から project 名 → ID を解決
+# 2. Issue の node_id を取得
+# 3. addProjectV2ItemById で project に追加（idempotent: 既に追加されていても成功）
+# 4. updateProjectV2ItemFieldValue で Status を設定
+# デフォルトは Todo、コマンド先頭に CLAUDE_ISSUE_STATUS=in_progress があれば In Progress
 # exit 0 常時
 
 if ! command -v jq &>/dev/null; then
@@ -10,7 +13,6 @@ fi
 
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
-RESPONSE=$(echo "$INPUT" | jq -r '.tool_response // ""' 2>/dev/null)
 
 # gh issue create 以外は素通り
 FIRST_LINE=$(echo "$CMD" | head -1)
@@ -18,13 +20,13 @@ if ! echo "$FIRST_LINE" | grep -qE '^\s*(CLAUDE_ISSUE_STATUS=\S+\s+)?gh\s+issue\
   exit 0
 fi
 
-# コマンドプレフィックスから意図を抽出: CLAUDE_ISSUE_STATUS=in_progress gh issue create ...
+# 目的ステータスを決定
 TARGET_STATUS="Todo"
 if echo "$CMD" | grep -qE 'CLAUDE_ISSUE_STATUS=in_progress\b'; then
   TARGET_STATUS="In Progress"
 fi
 
-# Issue URL を抽出（stdout から）
+# Issue URL を stdout から抽出
 STDOUT=$(echo "$INPUT" | jq -r '.tool_response.stdout // ""' 2>/dev/null)
 ISSUE_URL=$(echo "$STDOUT" | grep -oE 'https://github.com/[^/]+/[^/]+/issues/[0-9]+' | head -1)
 if [ -z "$ISSUE_URL" ]; then
@@ -35,71 +37,101 @@ ISSUE_NUM=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
 OWNER=$(echo "$ISSUE_URL" | sed 's|https://github.com/||' | cut -d'/' -f1)
 REPO_NAME=$(echo "$ISSUE_URL" | sed 's|https://github.com/||' | cut -d'/' -f2)
 
-# Issue のプロジェクトアイテムを取得（ステータス + フィールド情報を1回で）
-# GitHub API の eventual consistency 対策でリトライ: projectItems が空なら最大 5 回リトライ
-fetch_item_info() {
-  gh api graphql -f query='
-    query($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) {
-        issue(number: $number) {
-          projectItems(first: 5) {
-            nodes {
+# Issue の node_id を取得（addProjectV2ItemById に必要）
+ISSUE_NODE_ID=$(gh api "repos/$OWNER/$REPO_NAME/issues/$ISSUE_NUM" --jq '.node_id' 2>/dev/null)
+if [ -z "$ISSUE_NODE_ID" ]; then
+  exit 0
+fi
+
+# --project の値を抽出（クォート対応）
+PROJECT_NAME=$(echo "$CMD" | grep -oE '\-\-project\s+"[^"]+"' | sed 's/--project[[:space:]]*//' | tr -d '"')
+if [ -z "$PROJECT_NAME" ]; then
+  PROJECT_NAME=$(echo "$CMD" | grep -oE "\-\-project\s+'[^']+'" | sed "s/--project[[:space:]]*//" | tr -d "'")
+fi
+if [ -z "$PROJECT_NAME" ]; then
+  PROJECT_NAME=$(echo "$CMD" | grep -oE '\-\-project\s+[^ ]+' | sed 's/--project[[:space:]]*//')
+fi
+
+if [ -z "$PROJECT_NAME" ]; then
+  exit 0
+fi
+
+# プロジェクト ID + Status フィールド情報を取得（org → user fallback、1 query で全部）
+PROJECTS_RAW=$(gh api graphql -f query="{
+  organization(login: \"$OWNER\") {
+    projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      nodes {
+        id title closed
+        field(name: \"Status\") {
+          ... on ProjectV2SingleSelectField {
+            id
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}" 2>/dev/null)
+PROJECT_INFO=$(echo "$PROJECTS_RAW" | jq --arg name "$PROJECT_NAME" \
+  '.data.organization.projectsV2.nodes[]? | select(.title == $name and .closed == false)' 2>/dev/null)
+
+if [ -z "$PROJECT_INFO" ]; then
+  PROJECTS_RAW=$(gh api graphql -f query="{
+    viewer {
+      projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+        nodes {
+          id title closed
+          field(name: \"Status\") {
+            ... on ProjectV2SingleSelectField {
               id
-              project {
-                id
-                field(name: "Status") {
-                  ... on ProjectV2SingleSelectField {
-                    id
-                    options { id name }
-                  }
-                }
-              }
-              fieldValueByName(name: "Status") {
-                ... on ProjectV2ItemFieldSingleSelectValue { name }
-              }
+              options { id name }
             }
           }
         }
       }
     }
-  ' -f owner="$OWNER" -f repo="$REPO_NAME" -F number="$ISSUE_NUM" 2>/dev/null
-}
+  }" 2>/dev/null)
+  PROJECT_INFO=$(echo "$PROJECTS_RAW" | jq --arg name "$PROJECT_NAME" \
+    '.data.viewer.projectsV2.nodes[]? | select(.title == $name and .closed == false)' 2>/dev/null)
+fi
 
-ITEM_INFO=""
-for attempt in 1 2 3 4 5; do
-  ITEM_INFO=$(fetch_item_info)
-  ITEM_COUNT=$(echo "$ITEM_INFO" | jq '.data.repository.issue.projectItems.nodes | length' 2>/dev/null)
-  if [ -n "$ITEM_COUNT" ] && [ "$ITEM_COUNT" -gt 0 ]; then
-    break
-  fi
-  # eventual consistency 待ち: 0.5s, 1s, 1.5s, 2s
-  sleep "0.$((attempt * 5))"
-done
-
-if [ -z "$ITEM_INFO" ]; then
+if [ -z "$PROJECT_INFO" ]; then
   exit 0
 fi
 
-# ステータスが未設定（null/空）のアイテムに目的ステータスを設定
-echo "$ITEM_INFO" | jq -r --arg target "$TARGET_STATUS" '
-  .data.repository.issue.projectItems.nodes[]?
-  | select(.fieldValueByName.name == null or .fieldValueByName.name == "")
-  | .id + "|" + .project.id + "|" + .project.field.id + "|" + (.project.field.options[]? | select(.name == $target) | .id)
-' 2>/dev/null | while IFS='|' read -r ITEM_ID PROJECT_ID FIELD_ID OPTION_ID; do
-  if [ -z "$ITEM_ID" ] || [ -z "$FIELD_ID" ] || [ -z "$OPTION_ID" ]; then
-    continue
-  fi
+PROJECT_ID=$(echo "$PROJECT_INFO" | jq -r '.id' 2>/dev/null)
+FIELD_ID=$(echo "$PROJECT_INFO" | jq -r '.field.id // ""' 2>/dev/null)
+OPTION_ID=$(echo "$PROJECT_INFO" | jq -r --arg target "$TARGET_STATUS" \
+  '.field.options[]? | select(.name == $target) | .id' 2>/dev/null)
 
-  gh api graphql -f query='
-    mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
-      updateProjectV2ItemFieldValue(input: {
-        projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
-        value: { singleSelectOptionId: $optionId }
-      }) { projectV2Item { id } }
+if [ -z "$PROJECT_ID" ] || [ -z "$FIELD_ID" ] || [ -z "$OPTION_ID" ]; then
+  exit 0
+fi
+
+# addProjectV2ItemById で Issue を project に追加（idempotent: 既に追加済みでも item ID を返す）
+ADD_RESULT=$(gh api graphql -f query='
+  mutation($projectId: ID!, $contentId: ID!) {
+    addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+      item { id }
     }
-  ' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$OPTION_ID" 2>/dev/null
+  }
+' -f projectId="$PROJECT_ID" -f contentId="$ISSUE_NODE_ID" 2>/dev/null)
 
-  echo "Issue #${ISSUE_NUM} のプロジェクトステータスを ${TARGET_STATUS} に設定しました。"
-done
+ITEM_ID=$(echo "$ADD_RESULT" | jq -r '.data.addProjectV2ItemById.item.id // ""' 2>/dev/null)
+if [ -z "$ITEM_ID" ]; then
+  exit 0
+fi
+
+# Status を設定
+gh api graphql -f query='
+  mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+    updateProjectV2ItemFieldValue(input: {
+      projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+      value: { singleSelectOptionId: $optionId }
+    }) { projectV2Item { id } }
+  }
+' -f projectId="$PROJECT_ID" -f itemId="$ITEM_ID" -f fieldId="$FIELD_ID" -f optionId="$OPTION_ID" 2>/dev/null
+
+echo "Issue #${ISSUE_NUM} のプロジェクトステータスを ${TARGET_STATUS} に設定しました。"
 
 exit 0
