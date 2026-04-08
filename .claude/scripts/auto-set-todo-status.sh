@@ -36,45 +36,31 @@ OWNER=$(echo "$ISSUE_URL" | sed 's|https://github.com/||' | cut -d'/' -f1)
 REPO_NAME=$(echo "$ISSUE_URL" | sed 's|https://github.com/||' | cut -d'/' -f2)
 
 # Issue のプロジェクトアイテムを取得（ステータス + フィールド情報を1回で）
-# GitHub API の eventual consistency 対策でリトライ: projectItems が空なら最大 5 回リトライ
-fetch_item_info() {
-  gh api graphql -f query='
-    query($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) {
-        issue(number: $number) {
-          projectItems(first: 5) {
-            nodes {
+ITEM_INFO=$(gh api graphql -f query='
+  query($owner: String!, $repo: String!, $number: Int!) {
+    repository(owner: $owner, name: $repo) {
+      issue(number: $number) {
+        projectItems(first: 5) {
+          nodes {
+            id
+            project {
               id
-              project {
-                id
-                field(name: "Status") {
-                  ... on ProjectV2SingleSelectField {
-                    id
-                    options { id name }
-                  }
+              field(name: "Status") {
+                ... on ProjectV2SingleSelectField {
+                  id
+                  options { id name }
                 }
               }
-              fieldValueByName(name: "Status") {
-                ... on ProjectV2ItemFieldSingleSelectValue { name }
-              }
+            }
+            fieldValueByName(name: "Status") {
+              ... on ProjectV2ItemFieldSingleSelectValue { name }
             }
           }
         }
       }
     }
-  ' -f owner="$OWNER" -f repo="$REPO_NAME" -F number="$ISSUE_NUM" 2>/dev/null
-}
-
-ITEM_INFO=""
-for attempt in 1 2 3 4 5; do
-  ITEM_INFO=$(fetch_item_info)
-  ITEM_COUNT=$(echo "$ITEM_INFO" | jq '.data.repository.issue.projectItems.nodes | length' 2>/dev/null)
-  if [ -n "$ITEM_COUNT" ] && [ "$ITEM_COUNT" -gt 0 ]; then
-    break
-  fi
-  # eventual consistency 待ち: 0.5s, 1s, 1.5s, 2s
-  sleep "0.$((attempt * 5))"
-done
+  }
+' -f owner="$OWNER" -f repo="$REPO_NAME" -F number="$ISSUE_NUM" 2>/dev/null)
 
 if [ -z "$ITEM_INFO" ]; then
   exit 0
