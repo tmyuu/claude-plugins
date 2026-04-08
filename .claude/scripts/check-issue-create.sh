@@ -110,4 +110,50 @@ fi
 # 通過する場合もリマインド（stdout で注入）
 echo "✓ Issue 作成チェック通過。重複 Issue がないことを確認済みですか？"
 
+# 親候補の提示: 指定プロジェクト内の Open Issue を親候補として表示
+if [ -n "$PROJECT_NAME" ] && [ -n "$PROJECTS_JSON" ]; then
+  # プロジェクト ID を取得
+  PROJECT_ID=$(echo "$PROJECTS_JSON" | jq -r --arg name "$PROJECT_NAME" \
+    '.[] | select(.title == $name and .closed == false) | .id' 2>/dev/null | head -1)
+
+  if [ -n "$PROJECT_ID" ]; then
+    # プロジェクト内の Open Issue を取得（このリポジトリのもののみ）
+    PARENT_CANDIDATES=$(gh api graphql -f query='
+      query($projectId: ID!) {
+        node(id: $projectId) {
+          ... on ProjectV2 {
+            items(first: 100) {
+              nodes {
+                content {
+                  ... on Issue {
+                    number
+                    title
+                    state
+                    repository { nameWithOwner }
+                  }
+                }
+                fieldValueByName(name: "Status") {
+                  ... on ProjectV2ItemFieldSingleSelectValue { name }
+                }
+              }
+            }
+          }
+        }
+      }
+    ' -f projectId="$PROJECT_ID" 2>/dev/null | jq -r --arg repo "$REPO" \
+      '.data.node.items.nodes[]?
+       | select(.content.state == "OPEN" and .content.repository.nameWithOwner == $repo)
+       | "  #\(.content.number) [\(.fieldValueByName.name // "-")] \(.content.title)"' 2>/dev/null)
+
+    if [ -n "$PARENT_CANDIDATES" ]; then
+      echo ""
+      echo "⚠ 親 Issue 候補（プロジェクト「${PROJECT_NAME}」の Open Issue）:"
+      echo "$PARENT_CANDIDATES"
+      echo ""
+      echo "上記のいずれかと同じビジネス目的・機能テーマなら、**子 Issue として Sub-issues API で紐付け**てください。"
+      echo "単発で完結・関連なしの場合のみ独立 Issue として作成してください。"
+    fi
+  fi
+fi
+
 exit 0
