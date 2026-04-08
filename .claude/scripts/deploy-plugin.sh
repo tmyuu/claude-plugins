@@ -29,10 +29,12 @@ fi
 
 # 展開対象ファイルを決定
 if [ $# -eq 0 ]; then
-  # 引数なし: .claude/ 配下の全ファイル（settings.local.json, CLAUDE.md を除く）
+  # 引数なし: .claude/ 配下の全ファイル（開発中限定ファイル・ローカル設定を除く）
   FILES=$(cd "$SOURCE_DIR" && find . -type f \
     ! -name 'settings.local.json' \
     ! -name 'CLAUDE.md' \
+    ! -name 'deploy-plugin.sh' \
+    ! -name 'deploy-plugin.md' \
     ! -path './*.log' \
     | sed 's|^\./||')
 else
