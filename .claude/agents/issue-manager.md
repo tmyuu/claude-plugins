@@ -70,7 +70,6 @@ CLAUDE_ISSUE_STATUS=in_progress gh issue create ...
 以下のタスクは並列実行すること（時間短縮）:
 
 - **独立した子 Issue の作成**: `Agent(subagent_type: "issue-manager", run_in_background: true)` で並列起動
-- **複数リポジトリへのファイル展開**: `.claude/scripts/deploy-plugin.sh` を使用（内部で xargs -P で並列）
 - **独立した調査タスク**: Explore エージェントを複数並列で起動
 - **互いに依存しない GitHub API 呼び出し**: 単一メッセージで複数 Bash ツール呼び出し
 
