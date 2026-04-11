@@ -1,0 +1,18 @@
+{
+  "name": "claude-plugins",
+  "owner": {
+    "name": "tmyuu"
+  },
+  "plugins": [
+    {
+      "name": "github-project-manager",
+      "source": "./plugins/github-project-manager",
+      "description": "GitHub Issue/Project ライフサイクルを自動管理。整合性監査・ステータス自動更新・チェックリスト連動を提供。"
+    },
+    {
+      "name": "sales-pipeline",
+      "source": "./plugins/sales-pipeline",
+      "description": "営業パイプライン管理。stage ラベルで商談フェーズを管理し、GitHub Issue/Project で営業進捗を可視化。"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/inject-sales-state.sh",
+            "timeout": 15,
+            "statusMessage": "営業パイプライン状態を取得中..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-advance-stage.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

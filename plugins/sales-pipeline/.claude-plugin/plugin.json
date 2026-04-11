@@ -1,0 +1,13 @@
+{
+  "name": "sales-pipeline",
+  "version": "1.0.0",
+  "description": "営業パイプライン管理。stage:* ラベルで商談フェーズを管理し、GitHub Issue/Project で営業進捗を可視化。github-project-manager と併用。",
+  "author": {
+    "name": "tmyuu"
+  },
+  "repository": "https://github.com/tmyuu/claude-plugins",
+  "license": "MIT",
+  "dependencies": [
+    "github-project-manager@tmyuu/claude-plugins"
+  ]
+}
