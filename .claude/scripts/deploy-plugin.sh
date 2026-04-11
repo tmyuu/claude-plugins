@@ -7,7 +7,7 @@
 #
 # 展開先リポジトリは TARGET_REPOS で定義（必要に応じて編集）
 
-SOURCE_DIR="$HOME/Documents/claude-plugins/.claude"
+SOURCE_DIR="$HOME/Documents/workflow-plugins/.claude"
 TARGET_REPOS=(
   "livspect"
   "sukunabikona"
