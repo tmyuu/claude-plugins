@@ -26,6 +26,29 @@ Claude Code プラグインコレクション by @tmyuu
 
 > `sales-pipeline` は `github-project-manager` と併用する前提で設計されています。
 
+### 3. CLAUDE.md をセットアップ
+
+```
+/init-workflow
+```
+
+CLAUDE.md が自動生成/更新され、ワークフローのスキル参照が追記されます。
+
+### 4. 自動更新を有効にする（推奨）
+
+1. `/plugin` でプラグインマネージャーを開く
+2. **Marketplaces** タブ → `workflow-plugins` を選択
+3. **Enable auto-update** を選択
+
+有効にすると、Claude Code 起動時に自動で最新版に更新されます。
+
+### 手動更新
+
+```
+/plugin update github-project-manager@workflow-plugins
+/plugin update sales-pipeline@workflow-plugins
+```
+
 ## プラグイン構成
 
 ```
