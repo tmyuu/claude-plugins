@@ -6,8 +6,8 @@ Claude Code プラグインコレクション by @tmyuu
 
 | プラグイン | 説明 | インストール |
 |-----------|------|------------|
-| [github-project-manager](plugins/github-project-manager/) | GitHub Issue/Project ライフサイクルの自動管理 | `/plugin install github-project-manager@claude-plugins` |
-| [sales-pipeline](plugins/sales-pipeline/) | 営業パイプライン管理（stage ラベルで商談フェーズを可視化） | `/plugin install sales-pipeline@claude-plugins` |
+| [github-project-manager](plugins/github-project-manager/) | GitHub Issue/Project ライフサイクルの自動管理 | `/plugin install github-project-manager@tmyuu-plugins` |
+| [sales-pipeline](plugins/sales-pipeline/) | 営業パイプライン管理（stage ラベルで商談フェーズを可視化） | `/plugin install sales-pipeline@tmyuu-plugins` |
 
 ## インストール方法
 
@@ -20,8 +20,8 @@ Claude Code プラグインコレクション by @tmyuu
 ### 2. プラグインをインストール
 
 ```
-/plugin install github-project-manager@claude-plugins
-/plugin install sales-pipeline@claude-plugins
+/plugin install github-project-manager@tmyuu-plugins
+/plugin install sales-pipeline@tmyuu-plugins
 ```
 
 > `sales-pipeline` は `github-project-manager` と併用する前提で設計されています。
