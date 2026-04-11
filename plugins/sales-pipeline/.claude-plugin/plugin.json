@@ -6,8 +6,5 @@
     "name": "tmyuu"
   },
   "repository": "https://github.com/tmyuu/workflow-plugins",
-  "license": "MIT",
-  "dependencies": [
-    "github-project-manager@tmyuu/workflow-plugins"
-  ]
+  "license": "MIT"
 }
