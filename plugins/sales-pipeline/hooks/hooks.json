@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/inject-sales-state.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/inject-sales-state.sh\"",
             "timeout": 15,
             "statusMessage": "営業パイプライン状態を取得中..."
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-advance-stage.sh",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/auto-advance-stage.sh\"",
             "timeout": 10
           }
         ]
