@@ -1,4 +1,4 @@
-# claude-plugins
+# workflow-plugins
 
 Claude Code プラグイン開発リポジトリ。
 

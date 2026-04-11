@@ -1,8 +1,8 @@
 ---
-description: "[開発中のみ] claude-plugins の最新ファイルを展開先リポジトリに並列コピーする"
+description: "[開発中のみ] workflow-plugins の最新ファイルを展開先リポジトリに並列コピーする"
 ---
 
-`.claude/scripts/deploy-plugin.sh $ARGUMENTS` を実行して、claude-plugins の現在の状態を展開先リポジトリに反映してください。
+`.claude/scripts/deploy-plugin.sh $ARGUMENTS` を実行して、workflow-plugins の現在の状態を展開先リポジトリに反映してください。
 
 ## 注意
 
