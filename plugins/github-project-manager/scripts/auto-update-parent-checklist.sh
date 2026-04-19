@@ -1,96 +1,87 @@
 #!/bin/bash
-# PostToolUse Hook: 子 Issue close 成功後に親 Issue のチェックリストを自動更新
-# 親 Issue の「- [ ] ... #N ...」を「- [x] ... #N ...」に変更する
-# exit 0 常時（リマインド型）
+# PostToolUse: 子 Issue がクローズされたら親 Issue のチェックリストを自動更新
+# 検知する経路:
+#   1. gh issue close N
+#   2. gh pr merge [N]  → PR 本文の Closes #N を展開
+# 親 Issue の「- [ ] ... #N ...」を「- [x] ... #N ...」に変更
 
-if ! command -v jq &>/dev/null; then
-  exit 0
-fi
+source "$(dirname "$0")/lib.sh"
+
+has_jq || exit 0
 
 INPUT=$(cat)
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null)
+TOOL_NAME=$(echo "$INPUT" | read_tool_name)
+[ "$TOOL_NAME" != "Bash" ] && exit 0
 
-# Bash ツール以外は素通り
-if [ "$TOOL_NAME" != "Bash" ]; then
-  exit 0
+CMD=$(echo "$INPUT" | read_command)
+
+# 対象の子 Issue 番号を収集
+CHILD_NUMS=""
+if is_first_line_cmd "$CMD" '^\s*gh\s+issue\s+close\b'; then
+  CHILD_NUMS=$(echo "$CMD" | grep -oE 'gh\s+issue\s+close\s+([0-9]+)' | grep -oE '[0-9]+')
+elif is_first_line_cmd "$CMD" '^\s*gh\s+pr\s+merge\b'; then
+  PR_NUM=$(echo "$CMD" | grep -oE 'gh\s+pr\s+merge\s+([0-9]+)' | grep -oE '[0-9]+')
+  [ -z "$PR_NUM" ] && PR_NUM=$(get_pr_number_current)
+  if [ -n "$PR_NUM" ]; then
+    PR_BODY=$(get_pr_body "$PR_NUM")
+    CHILD_NUMS=$(extract_closing_refs "$PR_BODY")
+  fi
 fi
 
-CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
+[ -z "$CHILD_NUMS" ] && exit 0
 
-# gh issue close 以外は素通り（先頭行のみ判定）
-FIRST_LINE=$(echo "$CMD" | head -1)
-if ! echo "$FIRST_LINE" | grep -qE '^\s*gh\s+issue\s+close\b'; then
-  exit 0
-fi
+get_repo_info || exit 0
 
-# クローズした Issue 番号を取得
-CHILD_NUM=$(echo "$CMD" | grep -oE 'gh\s+issue\s+close\s+([0-9]+)' | grep -oE '[0-9]+')
-if [ -z "$CHILD_NUM" ]; then
-  exit 0
-fi
+update_one_child() {
+  local child_num="$1"
 
-# リポジトリ情報
-REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
-if [ -z "$REPO" ]; then
-  exit 0
-fi
-OWNER=$(echo "$REPO" | cut -d'/' -f1)
-REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
-
-# 親 Issue を Sub-issues API で検索
-PARENT_INFO=$(gh api graphql -f query='
-  query($owner: String!, $repo: String!, $number: Int!) {
-    repository(owner: $owner, name: $repo) {
-      issue(number: $number) {
-        parentIssue {
-          number
-          body
+  # Sub-issues API で親を取得
+  local parent_info parent_num parent_body
+  parent_info=$(gh api graphql -f query='
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        issue(number: $number) {
+          parentIssue { number body }
         }
       }
     }
-  }
-' -f owner="$OWNER" -f repo="$REPO_NAME" -F number="$CHILD_NUM" 2>/dev/null)
+  ' -f owner="$OWNER" -f repo="$REPO_NAME" -F number="$child_num" 2>/dev/null)
 
-PARENT_NUM=$(echo "$PARENT_INFO" | jq -r '.data.repository.issue.parentIssue.number // ""' 2>/dev/null)
-PARENT_BODY=$(echo "$PARENT_INFO" | jq -r '.data.repository.issue.parentIssue.body // ""' 2>/dev/null)
+  parent_num=$(echo "$parent_info" | jq -r '.data.repository.issue.parentIssue.number // ""')
+  parent_body=$(echo "$parent_info" | jq -r '.data.repository.issue.parentIssue.body // ""')
 
-if [ -z "$PARENT_NUM" ] || [ -z "$PARENT_BODY" ]; then
-  # Sub-issues API で親が見つからない場合、Issue 本文の "Parent: #N" パターンもフォールバック検索
-  CHILD_BODY=$(gh issue view "$CHILD_NUM" --json body --jq '.body' 2>/dev/null)
-  PARENT_NUM=$(echo "$CHILD_BODY" | grep -oE 'Parent:\s*#[0-9]+' | grep -oE '[0-9]+' | head -1)
-
-  if [ -z "$PARENT_NUM" ]; then
-    exit 0
+  # フォールバック: 子本文の "Parent: #N"
+  if [ -z "$parent_num" ] || [ -z "$parent_body" ]; then
+    local child_body
+    child_body=$(get_issue_body "$child_num")
+    parent_num=$(echo "$child_body" | grep -oE 'Parent:\s*#[0-9]+' | grep -oE '[0-9]+' | head -1)
+    [ -z "$parent_num" ] && return 0
+    parent_body=$(get_issue_body "$parent_num")
+    [ -z "$parent_body" ] && return 0
   fi
 
-  PARENT_BODY=$(gh issue view "$PARENT_NUM" --json body --jq '.body' 2>/dev/null)
-  if [ -z "$PARENT_BODY" ]; then
-    exit 0
+  # 親のチェックリストに該当子の参照が無ければ何もしない
+  if ! echo "$parent_body" | grep -qE "- \[ \].*#${child_num}\b"; then
+    return 0
   fi
-fi
 
-# 親 Issue のチェックリストに子 Issue (#N) が含まれているか確認
-if ! echo "$PARENT_BODY" | grep -qE "- \[ \].*#${CHILD_NUM}\b"; then
-  # 未チェック項目に子 Issue の参照がない場合はスキップ
-  exit 0
-fi
+  local updated_body
+  updated_body=$(echo "$parent_body" | sed -E "s/^(\s*)- \[ \](.*#${child_num}\b)/\1- [x]\2/g")
 
-# チェックリストを更新: - [ ] ... #N ... → - [x] ... #N ...
-UPDATED_BODY=$(echo "$PARENT_BODY" | sed -E "s/^(\s*)- \[ \](.*#${CHILD_NUM}\b)/\1- [x]\2/g")
-
-# 親 Issue を更新
-gh issue edit "$PARENT_NUM" --body "$UPDATED_BODY" 2>/dev/null
-
-if [ $? -eq 0 ]; then
-  echo "親 Issue #${PARENT_NUM} のチェックリストを更新しました（子 Issue #${CHILD_NUM} を完了）"
-
-  # 残りの未チェック項目を確認
-  REMAINING=$(echo "$UPDATED_BODY" | grep -cE '^\s*- \[ \]' 2>/dev/null || echo "0")
-  if [ "$REMAINING" = "0" ]; then
-    echo "親 Issue #${PARENT_NUM} の全チェックリストが完了しました。クローズを検討してください。"
-  else
-    echo "親 Issue #${PARENT_NUM} の残り未完了項目: ${REMAINING} 件"
+  if gh issue edit "$parent_num" --body "$updated_body" >/dev/null 2>&1; then
+    echo "親 Issue #${parent_num} のチェックリストを更新しました（子 Issue #${child_num} を完了）"
+    local remaining
+    remaining=$(echo "$updated_body" | grep -cE '^\s*- \[ \]' 2>/dev/null || echo "0")
+    if [ "$remaining" = "0" ]; then
+      echo "親 Issue #${parent_num} の全チェックリストが完了しました。クローズを検討してください。"
+    else
+      echo "親 Issue #${parent_num} の残り未完了項目: ${remaining} 件"
+    fi
   fi
-fi
+}
+
+for num in $CHILD_NUMS; do
+  update_one_child "$num"
+done
 
 exit 0
