@@ -30,5 +30,9 @@ $ARGUMENTS
 4. タイプ設定（`gh api graphql` で Issue Type 設定）
 
 ### 親子関係（該当する場合）
-- 子 Issue の本文に `Parent: #N` を記載
-- 親 Issue のアクションアイテムに子をチェックリストとして追加
+- **GitHub Sub-issues API で親子関係を設定する**（`Parent: #N` テキストは使わない）
+  ```bash
+  CHILD_ID=$(gh api repos/{owner}/{repo}/issues/{child} --jq '.id')
+  gh api repos/{owner}/{repo}/issues/{parent}/sub_issues -F sub_issue_id="$CHILD_ID"
+  ```
+- 親 Issue のアクションアイテムに子をチェックリスト形式で追加（例: `- [ ] #123 子タスク概要`）

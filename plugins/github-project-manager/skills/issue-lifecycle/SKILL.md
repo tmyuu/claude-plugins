@@ -31,10 +31,22 @@ user-invocable: false
 - ステータスは作業状態に応じて正確に切り替える（Todo → In Progress → Done）
 - 子 Issue をクローズしたら、親 Issue のアクションアイテムも `- [x]` に更新する
 - 子 Issue のクローズと親のチェック更新は**セットで行う**
+- **チェックリストが全て埋まっていない Issue をクローズしない**
+  - `gh issue close` / `gh pr merge` / `gh issue edit --state closed` / graphql `closeIssue` は全てブロックされる
+  - 閉じたい場合は先に /update-issue でチェックを埋めるか、ユーザーに「この項目は対応不要か」を確認
+
+## 作業開始
+
+- Issue が確定したら `/start #N` で作業開始する（推奨エントリポイント）
+  - Issue の実在・open 状態を検証
+  - `feature/#N-description` ブランチを作成
+  - プロジェクトステータスを In Progress に遷移
+- 手動で始める場合も同じ 3 つのステップを全て実施する
 
 ## ブランチ
 
 - ブランチ名に **Issue 番号を含める**: `feature/#N-description` or `fix/#N-description`
+- ブランチ切替時に Issue の **実在・状態(open)が検証される**（存在しない / closed ならブロック）
 - GitHub が自動的に Development サイドバーにリンクする
 
 ## PR
@@ -84,7 +96,9 @@ user-invocable: false
 ## やってはいけないこと
 
 - Issue 番号なしのコミット
+- 未完了チェックリストを残したまま Issue / PR をクローズ（全経路でブロックされる）
 - ラベルやタイプの後からの変更（原則。typo 修正は可）
 - ユーザーに確認せずに Issue をクローズ
 - `git push --force` を main ブランチに実行
 - プロジェクトをリポジトリにリンクせずに放置
+- `feature/#N` ブランチ上で **Issue #N の範囲外の作業**を始める（範囲外なら /new-issue で別 Issue を立てる）
