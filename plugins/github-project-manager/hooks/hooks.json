@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-issue-context.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-main-branch-edit.sh\"",
             "timeout": 5
           }
         ]
@@ -40,32 +40,32 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-commit.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-commit.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-issue-create.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-issue-create.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-branch.sh\"",
-            "timeout": 5
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-branch.sh\"",
+            "timeout": 10
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-close.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-close.sh\"",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-pr-create.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-pr-create.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-project-create.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/guard-project-create.sh\"",
             "timeout": 5
           }
         ]
@@ -87,17 +87,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/check-issue-type.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/review-issue-type.sh\"",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/auto-update-issue-status.sh\"",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/auto-done-status.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/auto-status-transition.sh\"",
             "timeout": 15
           },
           {
