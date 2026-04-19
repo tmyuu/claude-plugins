@@ -62,10 +62,25 @@ user-invocable: false
   - 例: テスト完了 → 検収送付（テスト Issue が検収 Issue を Blocks）
 - 重複 Issue は **Duplicates** でマークしクローズ
 
-## 検収
+## 議事録（Minutes）
 
-- Acceptance タイプの Issue が進行中になると、クライアントに自動通知される
-- 検収承認でクローズ、差し戻しで再オープン
+- `/new-minutes <md-path or slug>` で作成する
+- md の置き場は **`docs/meetings/YYYY-MM-DD-<slug>.md` 固定**
+- md を一次情報として扱い、Issue 本文には md への相対リンクを必ず残す
+- md が無ければコマンドはテンプレを生成して中断する（= 編集してから再実行）
+- アクションアイテムは後から **`/new-issue` で子 Task に切り出し**、Sub-issues API で親 Minutes に紐付け
+- ラベル・ステータス管理は他タイプと同じ（フェーズ + 重要度、Todo → In Progress → Done）
+
+## 検収（Acceptance）
+
+- `/new-acceptance <対象> --client @handle --blocks-by #N` で作成する
+- **アサインはクライアント**（開発者ではない）
+- 前工程 Issue は **Blocks by** で明示する（実装 Issue → 検収 Issue を Blocks）
+- 作成後の**検収作業（承認 / 差し戻し）はクライアントが GitHub 上で手動実施**する（自動化しない）
+  - 承認: クライアントがチェックリストを埋めて Issue をクローズ
+  - 差し戻し: クライアントが Issue をコメントで指摘し reopen
+- Status は前工程完了時に `/update-issue` で In Progress に遷移させる（= クライアントに通知が飛ぶタイミング）
+- ラベル: 納品 / 検収フェーズ + 重要度
 
 ## プロジェクト
 
