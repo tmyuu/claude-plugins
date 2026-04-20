@@ -1,0 +1,50 @@
+{
+  "$comment": "Issue/PR の分類基準の一次情報。scripts/taxonomy.sh 経由で参照される。リポ固有の .claude/workflow-taxonomy.json があればそちらが優先される。",
+  "labels": {
+    "phase": {
+      "description": "プロジェクトのライフサイクル段階",
+      "required": true,
+      "cardinality": 1,
+      "values": [
+        { "name": "ヒアリング", "color": "fbca04", "description": "要件ヒアリング・リサーチ段階" },
+        { "name": "見積もり", "color": "d4c5f9", "description": "工数見積もり・提案段階" },
+        { "name": "開発", "color": "1d76db", "description": "実装・開発作業" },
+        { "name": "テスト", "color": "5319e7", "description": "QA・テスト段階" },
+        { "name": "納品", "color": "006b75", "description": "納品・検収・リリース段階" }
+      ]
+    },
+    "priority": {
+      "description": "Issue の重要度",
+      "required": true,
+      "cardinality": 1,
+      "values": [
+        { "name": "重要度:高", "color": "b60205", "description": "即時対応が必要" },
+        { "name": "重要度:中", "color": "fbca04", "description": "通常対応" },
+        { "name": "重要度:低", "color": "c2e0c6", "description": "余裕があれば" }
+      ]
+    }
+  },
+  "types": {
+    "description": "GitHub Issue Types (org リポジトリのみ設定可)",
+    "values": [
+      { "name": "Task", "description": "A specific piece of work" },
+      { "name": "Bug", "description": "An unexpected problem or behavior" },
+      { "name": "Feature", "description": "A request, idea, or new functionality" },
+      { "name": "Minutes", "description": "A record of meeting discussions and decisions" },
+      { "name": "Acceptance", "description": "A review and approval of delivered work" }
+    ],
+    "typeWordsToBlockInLabels": [
+      "bug", "task", "feature", "minutes", "acceptance",
+      "バグ", "機能", "タスク", "議事録", "検収"
+    ]
+  },
+  "status": {
+    "description": "GitHub Projects v2 の Status フィールド",
+    "flow": ["Todo", "In Progress", "Done"],
+    "transitions": [
+      { "trigger": "commit", "from": "Todo", "to": "In Progress" },
+      { "trigger": "close", "to": "Done" },
+      { "trigger": "merge", "to": "Done" }
+    ]
+  }
+}

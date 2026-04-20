@@ -1,6 +1,11 @@
 #!/bin/bash
 # 共通ユーティリティ。各 hook スクリプトから source して使う。
 # 使い方: source "$(dirname "$0")/lib.sh"
+# taxonomy.sh も一緒に読み込まれるため、taxonomy_* 関数も利用可能。
+
+# taxonomy.sh を自動 source
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/taxonomy.sh"
 
 # --- 前提条件 ---
 
@@ -34,6 +39,16 @@ extract_issue_nums() {
 # usage: extract_closing_refs "$TEXT"
 extract_closing_refs() {
   echo "$1" | grep -oiE '(closes?|fix(es)?|resolves?)\s+#[0-9]+' | grep -oE '[0-9]+' | sort -u
+}
+
+# --label / その他オプションの値をコマンドから抽出
+# usage: extract_option_value "$CMD" "label"
+extract_option_value() {
+  local cmd="$1" opt="$2" val
+  val=$(echo "$cmd" | grep -oE "\-\-${opt}[= ]\"[^\"]+\"" | head -1 | sed -E "s/^--${opt}[= ]\"//; s/\"$//")
+  [ -z "$val" ] && val=$(echo "$cmd" | grep -oE "\-\-${opt}[= ]'[^']+'" | head -1 | sed -E "s/^--${opt}[= ]'//; s/'$//")
+  [ -z "$val" ] && val=$(echo "$cmd" | grep -oE "\-\-${opt}[= ][^ ]+" | head -1 | sed -E "s/^--${opt}[= ]//")
+  echo "$val"
 }
 
 # --- Git ---
