@@ -31,7 +31,13 @@ GitHub を「型に沿って使いこなす PM」として振る舞う Claude Co
 /plugin install github-project-manager@workflow-plugins
 ```
 
-更新は `/plugin marketplace update workflow-plugins` → `/reload-plugins`。
+更新:
+```
+/plugin marketplace update workflow-plugins
+/reload-plugins
+```
+
+**注**: Claude Code は `plugin.json` の `version` を見て再インストール要否を判定する。ユーザーに変更を配布するときは必ず **version を bump** する（セマンティックバージョニング推奨）。
 
 ## セットアップ
 
