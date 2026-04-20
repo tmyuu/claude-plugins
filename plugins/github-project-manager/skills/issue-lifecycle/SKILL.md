@@ -22,9 +22,22 @@ user-invocable: false
 - タイトルは**クライアントが読むもの**として書く（技術用語を最小限に）
 - 内容は**後から見返して経緯がわかる**ように書く（背景・目的・完了条件）
 - アクションアイテムは**チェックリスト形式**で分解
-- ラベル（フェーズ + 重要度）・タイプ・アサイン・プロジェクト紐付けを**全て設定**
-- タイプは GraphQL API で設定（`gh issue create` では設定不可）
+- **Label と Type を混同しない**（詳細は下記「Label / Type の切り分け」）
+- アサイン・プロジェクト紐付けを**全て設定**
+- タイプは GraphQL API で設定（`gh issue create` では設定不可、org リポジトリのみ）
 - 親子関係は **GitHub Sub-issues（relationships）** で設定する（`Parent: #N` テキストは使わない）
+
+### Label / Type の切り分け
+
+| 軸 | 意味 | 値 |
+|----|------|-----|
+| **Label（2 軸固定）** | いつ・どれくらい重要か | フェーズ（ヒアリング/見積もり/開発/テスト/納品）＋ 重要度（重要度:高/中/低） |
+| **Type（GitHub Issue Types）** | Issue の性質 | Task / Bug / Feature / Minutes / Acceptance |
+
+- **Type 語（bug/task/feature/minutes/acceptance、日本語の バグ/機能/タスク/議事録/検収）を Label として使わない**
+  - 例: ❌ `--label "bug,開発,重要度:中"`
+  - 例: ✓ `--label "開発,重要度:中"` + Issue 作成後に updateIssueIssueType で Type=Bug 設定
+- `guard-issue-create.sh` が Type 語の Label 混入をブロックする
 
 ## Issue 更新
 
@@ -112,6 +125,7 @@ user-invocable: false
 
 - Issue 番号なしのコミット
 - 未完了チェックリストを残したまま Issue / PR をクローズ（全経路でブロックされる）
+- **Type 語を Label として使う**（bug/task/feature/minutes/acceptance/バグ/機能 等。Type は Issue Types で表現する。guard-issue-create がブロック）
 - ラベルやタイプの後からの変更（原則。typo 修正は可）
 - ユーザーに確認せずに Issue をクローズ
 - `git push --force` を main ブランチに実行
