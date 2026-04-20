@@ -113,6 +113,37 @@ if [ -n "$RECENT_CLOSED" ]; then
 fi
 echo ""
 
+# === 親子関係（直近 Open 30 件） ===
+RELATIONS_JSON=$(gh api graphql -f query='
+  query($owner: String!, $repo: String!) {
+    repository(owner: $owner, name: $repo) {
+      issues(first: 30, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
+        nodes {
+          number title body
+          parentIssue { number }
+        }
+      }
+    }
+  }
+' -f owner="$OWNER" -f repo="$REPO_NAME" 2>/dev/null)
+
+if [ -n "$RELATIONS_JSON" ] && [ "$RELATIONS_JSON" != "null" ]; then
+  RELATIONS_OUT=$(echo "$RELATIONS_JSON" | jq -r '
+    .data.repository.issues.nodes[]? |
+    (.body // "" | split("\n") | map(select(test("^\\s*- \\[[ x]\\]"))) | map(scan("#([0-9]+)")) | flatten | unique) as $refs |
+    select(.parentIssue.number != null or ($refs | length) > 0) |
+    "- #\(.number) \(.title)"
+    + (if .parentIssue.number then "\n    parent: #\(.parentIssue.number)" else "" end)
+    + (if ($refs | length) > 0 then "\n    body チェックリスト参照: \($refs | map("#" + tostring) | join(", "))" else "" end)
+  ' 2>/dev/null)
+
+  if [ -n "$RELATIONS_OUT" ]; then
+    echo "### 親子関係（直近 Open 30 件）"
+    echo "$RELATIONS_OUT"
+    echo ""
+  fi
+fi
+
 # === Git 状態 ===
 echo "### Git"
 echo "branch: $(get_current_branch)"
@@ -137,6 +168,9 @@ cat <<'AUDIT'
 - Closed プロジェクトに Open Issue が残っている
 - リポリンク切れ（リポリンク:✗）
 - Open Issue なのに Status:Done / Closed Issue なのに Status:Todo 等のステータス乖離
+- **親子関係の不整合**（上記「親子関係」セクションを参照）
+  - 親 A の body チェックリストに #B あり、だが #B の parent が A でない → 紐付け漏れ
+  - #B の parent が A、だが A の body チェックリストに #B なし → 親記述漏れ
 - **チェックリスト未完了で Closed**（= 作業が終わっていないのに閉じている）
   → reopen してチェックを埋めるか、ユーザーに「意図的に閉じたか」を確認
 

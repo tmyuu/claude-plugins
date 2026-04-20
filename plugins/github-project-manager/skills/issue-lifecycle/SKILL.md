@@ -6,128 +6,114 @@ user-invocable: false
 
 # Issue ライフサイクルルール
 
-以下のルールは常に意識すること。
+プラグインは以下の **4 つの制御軸**で GitHub を型に沿って使わせる。
+分類基準（フェーズ / 重要度 / タイプ / ステータス）の一次情報は `config/taxonomy.json`。
 
-## コミット
+---
 
-- コミットメッセージには**必ず Issue 番号（#N）を含める**
-- 対応する Issue がなければ、先に Issue を立てる
-- 「既存 Issue の延長」と思っても、作業内容が変わっていれば新しい Issue を立てる
-- コミットメッセージは日本語で、変更の「何を・なぜ」を簡潔に書く
+## 軸 1: 型通りに作る
 
-## Issue 作成
-
-- 作成前に**既存のオープン Issue を確認**し、重複がないか確認する
-- 同じ目的の Issue が既にあれば新規作成しない
-- タイトルは**クライアントが読むもの**として書く（技術用語を最小限に）
-- 内容は**後から見返して経緯がわかる**ように書く（背景・目的・完了条件）
+### Issue 作成（/new-issue, /new-minutes, /new-acceptance）
+- 作成前に**既存オープン Issue を確認**し、重複を避ける
+- タイトルは**クライアントが読む**前提（技術用語を最小限に）
+- 本文は**後から見返して経緯がわかる**（背景 / 目的 / 完了条件 / アクションアイテム）
 - アクションアイテムは**チェックリスト形式**で分解
-- **Label と Type を混同しない**（詳細は下記「Label / Type の切り分け」）
-- アサイン・プロジェクト紐付けを**全て設定**
-- タイプは GraphQL API で設定（`gh issue create` では設定不可、org リポジトリのみ）
-- 親子関係は **GitHub Sub-issues（relationships）** で設定する（`Parent: #N` テキストは使わない）
 
-### Label / Type の切り分け
+### Label / Type の切り分け（重要）
 
-| 軸 | 意味 | 値 |
-|----|------|-----|
-| **Label（2 軸固定）** | いつ・どれくらい重要か | フェーズ（ヒアリング/見積もり/開発/テスト/納品）＋ 重要度（重要度:高/中/低） |
-| **Type（GitHub Issue Types）** | Issue の性質 | Task / Bug / Feature / Minutes / Acceptance |
+| 軸 | 意味 | 値（taxonomy.json） |
+|----|------|------|
+| **Label（2 軸必須）** | いつ・どれくらい重要か | フェーズ（ヒアリング/見積もり/開発/テスト/納品）＋ 重要度（重要度:高/中/低） |
+| **Type（Issue Types）** | Issue の性質 | Task / Bug / Feature / Minutes / Acceptance |
 
-- **Type 語（bug/task/feature/minutes/acceptance、日本語の バグ/機能/タスク/議事録/検収）を Label として使わない**
-  - 例: ❌ `--label "bug,開発,重要度:中"`
-  - 例: ✓ `--label "開発,重要度:中"` + Issue 作成後に updateIssueIssueType で Type=Bug 設定
-- `guard-issue-create.sh` が Type 語の Label 混入をブロックする
+- **Type 語（bug/task/feature/minutes/acceptance/バグ/機能 等）を Label として使わない** — `guard-issue-create.sh` がブロック
+- 個人リポジトリでは Issue Type が使えないのでスキップ（Label のみ）
 
-## Issue 更新
+### コミット
+- メッセージに **必ず Issue 番号（#N）を含める** — `guard-commit.sh` がブロック
+- 対応 Issue がなければ先に Issue を立てる
 
-- ステータスは作業状態に応じて正確に切り替える（Todo → In Progress → Done）
-- 子 Issue をクローズしたら、親 Issue のアクションアイテムも `- [x]` に更新する
-- 子 Issue のクローズと親のチェック更新は**セットで行う**
-- **チェックリストが全て埋まっていない Issue をクローズしない**
-  - `gh issue close` / `gh pr merge` / `gh issue edit --state closed` / graphql `closeIssue` は全てブロックされる
-  - 閉じたい場合は先に /update-issue でチェックを埋めるか、ユーザーに「この項目は対応不要か」を確認
+### ブランチ（/start #N 推奨）
+- `feature/#N-description` or `fix/#N-description` — `guard-branch.sh` がブロック
+- ブランチ切替時に Issue の**実在・状態(open)を検証**
+- `/start #N` で ブランチ作成 + Status In Progress を一発で
 
-## 作業開始
+### PR
+- 本文に `Closes #N` を必須 — `guard-pr-create.sh` がブロック
+- Label / Project は対応 Issue と同じ
+- PR タイトルは短く（70 文字以内）
 
-- Issue が確定したら `/start #N` で作業開始する（推奨エントリポイント）
-  - Issue の実在・open 状態を検証
-  - `feature/#N-description` ブランチを作成
-  - プロジェクトステータスを In Progress に遷移
-- 手動で始める場合も同じ 3 つのステップを全て実施する
+---
 
-## ブランチ
+## 軸 2: 親子関係を最適に保つ
 
-- ブランチ名に **Issue 番号を含める**: `feature/#N-description` or `fix/#N-description`
-- ブランチ切替時に Issue の **実在・状態(open)が検証される**（存在しない / closed ならブロック）
-- GitHub が自動的に Development サイドバーにリンクする
+- 親子関係は **GitHub Sub-issues API** で設定する（`Parent: #N` テキストは使わない）
+  ```bash
+  CHILD_ID=$(gh api repos/{owner}/{repo}/issues/{child} --jq '.id')
+  gh api repos/{owner}/{repo}/issues/{parent}/sub_issues -F sub_issue_id="$CHILD_ID"
+  ```
+- **親 Issue のチェックリストに子 #N を必ず記載**（`- [ ] #123 子の概要`）
+- 子クローズで親チェックリストを**自動連動**（`auto-update-parent-checklist.sh`）
+- SessionStart で **親子整合性を監査**（以下の矛盾を LLM に見せる）
+  - 親 body チェックリストに #B あり、だが #B の parent が親でない → 紐付け漏れ
+  - #B の parent が親、だが親 body チェックリストに #B なし → 親記述漏れ
 
-## PR
+### 作業の分割判断（子 Issue に切り出す）
 
-- PR 本文に `Closes #N` を含める（マージで自動クローズ + Development リンク）
-- Issue をクローズせずにリンクだけしたい場合は `Refs #N`
-- PR タイトルは短く（70文字以内）、詳細は本文に
+以下に該当したらサブ Issue に分割:
+- **独立した変更が複数ある**
+- **スコープが膨らんでいる**
+- **作業中に別の問題を発見した**
 
-## Relationships
+### Relationships 使い分け
+- **Sub-issues**: 親タスクの一部
+- **Blocks / Blocked by**: 依存関係（例: 実装 → テスト → 検収 → 納品）
+- **Duplicates**: 重複 Issue（`gh issue close --reason "not planned"` と併用）
 
-- 親子関係は **Sub-issues API** で設定する
-- 依存関係がある場合は **Blocks / Blocked by** を設定する
-  - 例: テスト完了 → 検収送付（テスト Issue が検収 Issue を Blocks）
-- 重複 Issue は **Duplicates** でマークしクローズ
+---
 
-## 議事録（Minutes）
+## 軸 3: ステータスを作業実態に合わせる
 
-- `/new-minutes <md-path or slug>` で作成する
-- md の置き場は **`docs/meetings/YYYY-MM-DD-<slug>.md` 固定**
-- md を一次情報として扱い、Issue 本文には md への相対リンクを必ず残す
-- md が無ければコマンドはテンプレを生成して中断する（= 編集してから再実行）
-- アクションアイテムは後から **`/new-issue` で子 Task に切り出し**、Sub-issues API で親 Minutes に紐付け
-- ラベル・ステータス管理は他タイプと同じ（フェーズ + 重要度、Todo → In Progress → Done）
+- Status: **Todo → In Progress → Done**（taxonomy.json `status.flow`）
+- 自動遷移（`auto-status-transition.sh`）:
+  - commit（Todo 時）→ In Progress
+  - gh issue close → Done
+  - gh pr merge → Done（Closes #N の対象、または PR ブランチ由来の Issue）
+- 手動変更も尊重（すでに In Progress / Done なら素通り）
+- **GitHub Projects v2** のみ対応。プロジェクトに紐付いていない Issue は遷移しない
 
-## 検収（Acceptance）
+### プロジェクト管理
+- プロジェクトは**既存のものに紐付ける**（新規作成は `guard-project-create.sh` でブロック）
+- プロジェクト作成後は**必ずリポジトリにリンク**する（`linkProjectV2ToRepository`）
+- Issue は `--project` で紐付け
 
-- `/new-acceptance <対象> --client @handle --blocks-by #N` で作成する
-- **アサインはクライアント**（開発者ではない）
-- 前工程 Issue は **Blocks by** で明示する（実装 Issue → 検収 Issue を Blocks）
-- 作成後の**検収作業（承認 / 差し戻し）はクライアントが GitHub 上で手動実施**する（自動化しない）
-  - 承認: クライアントがチェックリストを埋めて Issue をクローズ
-  - 差し戻し: クライアントが Issue をコメントで指摘し reopen
-- Status は前工程完了時に `/update-issue` で In Progress に遷移させる（= クライアントに通知が飛ぶタイミング）
-- ラベル: 納品 / 検収フェーズ + 重要度
+### 検収（Acceptance）のステータス運用
+- `/new-acceptance` 作成時は Todo
+- 前工程完了で `/update-issue` で In Progress に遷移（= クライアント通知）
+- **承認 / 差し戻しはクライアントが GitHub 上で手動実施**（プラグインは介入しない）
 
-## プロジェクト
+---
 
-- プロジェクト作成前に**既存プロジェクト一覧を確認**し、該当するものがあれば使う
-- プロジェクト作成後は必ず**リポジトリにリンク**する（`linkProjectV2ToRepository`）
-- リンクしないとリポジトリの Projects タブに表示されない
-- Issue は `--project` でプロジェクトに紐付ける
+## 軸 4: チェックリストを潰さずにクローズしない
 
-## 作業の分割判断
+- クローズ前に未完了チェックリストを**全経路でハードゲート検証**（`guard-close.sh`）
+  - `gh issue close N`
+  - `gh issue edit N --state closed`
+  - `gh pr merge`（PR 本文の Closes #N、無ければブランチ由来 Issue を推測）
+  - `gh api graphql ... closeIssue / updateIssue {state: CLOSED}` → ブロック（誘導のみ）
+- SessionStart で **チェック未完了 × Closed** を異常として検出・LLM 修復
+- 完了した項目は都度 `/update-issue` でチェックを埋めていく（溜めない）
 
-作業中に以下のいずれかに該当すると判断したら、サブ Issue に分割する:
-
-- **独立した変更が複数ある**: 1つの Issue に対して、互いに依存しない複数の変更が必要な場合
-- **スコープが膨らんでいる**: 作業を進める中で当初の想定を超える変更が必要になった場合
-- **別の問題を発見した**: 作業中にバグや改善点を見つけたが、今の Issue とは直接関係ない場合
-
-### 分割の進め方
-1. 現在の Issue の作業を一旦区切る
-2. ユーザーに「この部分はサブ Issue に切り出します」と報告
-3. issue-manager でサブ Issue を作成（Sub-issues API で親子関係を設定）
-4. 親 Issue のアクションアイテムにサブ Issue をチェックリストとして追加
-5. 現在の Issue の残り作業に集中する
-
-### 分割しない場合
-- 変更が小さく、1コミットで完結する場合
-- 変更同士が強く依存していて分割すると逆に複雑になる場合
+---
 
 ## やってはいけないこと
 
 - Issue 番号なしのコミット
-- 未完了チェックリストを残したまま Issue / PR をクローズ（全経路でブロックされる）
-- **Type 語を Label として使う**（bug/task/feature/minutes/acceptance/バグ/機能 等。Type は Issue Types で表現する。guard-issue-create がブロック）
+- **未完了チェックリストのままクローズ**（全経路でブロックされる）
+- **Type 語を Label として使う**（`guard-issue-create.sh` がブロック）
+- **親子関係をテキストで表現**（`Parent: #N` は使わない → Sub-issues API）
 - ラベルやタイプの後からの変更（原則。typo 修正は可）
 - ユーザーに確認せずに Issue をクローズ
 - `git push --force` を main ブランチに実行
 - プロジェクトをリポジトリにリンクせずに放置
-- `feature/#N` ブランチ上で **Issue #N の範囲外の作業**を始める（範囲外なら /new-issue で別 Issue を立てる）
+- `feature/#N` ブランチ上で **Issue #N の範囲外の作業**を始める（範囲外なら /new-issue で別 Issue）
