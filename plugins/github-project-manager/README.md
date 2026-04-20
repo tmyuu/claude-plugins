@@ -133,8 +133,19 @@ github-project-manager/
 
 ## 設計方針
 
+### Label と Type の切り分け
+
+GitHub の 2 つの分類軸を明確に使い分ける:
+
+| 軸 | 意味 | 値 |
+|----|------|-----|
+| **Label（2 軸固定）** | いつ・どれくらい重要か | フェーズ（ヒアリング/見積もり/開発/テスト/納品）＋ 重要度（重要度:高/中/低） |
+| **Type（Issue Types）** | Issue の性質 | Task / Bug / Feature / Minutes / Acceptance |
+
+Type 語（bug/task/feature/minutes/acceptance/バグ/機能 等）を Label に混ぜると**「あれ、これ Type じゃないの？」となる**。`guard-issue-create.sh` が混入をブロックする。
+
 ### ハードゲート（bash で確定違反をブロック）
-Issue 番号なしコミット、未完了チェックリストでのクローズ、main ブランチでの直接編集など、
+Issue 番号なしコミット、未完了チェックリストでのクローズ、main ブランチでの直接編集、**Type 語の Label 混入**など、
 **ルールとして明確に違反とわかるもの**は hook で即ブロックし stderr で自己修正を促す。
 
 ### LLM 推論型監査（SessionStart で状態を注入）

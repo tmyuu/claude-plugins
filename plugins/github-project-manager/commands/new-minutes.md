@@ -96,11 +96,12 @@ md の内容を読み、以下に沿って Issue 本文を構成する:
 必須設定:
 - `--title "議事録: {会議タイトル} ({日付})"`
 - `--body "..."`（上記で組み立てた本文）
-- `--label "<フェーズ>,重要度:中"` — フェーズは議事の性質に応じて（ヒアリング/見積もり/開発/テスト/納品）。不明ならユーザーに確認
+- `--label "<フェーズ>,重要度:中"` — **Label は フェーズ + 重要度の 2 軸のみ**。「議事録」「minutes」等の Type 語を Label に含めない
+  - フェーズは議事の性質に応じて（ヒアリング/見積もり/開発/テスト/納品）。不明ならユーザーに確認
 - `--assignee tmyuu`（`gh api user --jq '.login'` で取得）
 - `--project "<プロジェクト名>"` — SessionStart の一覧から該当を選ぶ。複数プロジェクトに該当する場合はユーザー確認
 
-Type 設定（org リポジトリのみ）: `updateIssueIssueType` mutation で `Minutes` に設定。
+**Type 設定**（org リポジトリのみ）: `updateIssueIssueType` mutation で `Minutes` に設定。これが議事録性質を表現する一次情報。
 
 プロジェクトアイテムの Status を **Todo** に明示設定。
 

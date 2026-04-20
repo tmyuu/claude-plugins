@@ -24,7 +24,9 @@ $ARGUMENTS
 
 - Issue タイトルから短い slug を生成（英数字ハイフン、10-30 文字程度、全角は転記せず意訳してよい）
 - ブランチ名: `feature/#N-<slug>`（バグ修正の場合は `fix/#N-<slug>`）
-- ラベルに「bug」「バグ」が含まれていれば `fix/`、それ以外は `feature/`
+- **Issue Type が `Bug` なら `fix/`、それ以外は `feature/`**
+  - Type 取得: `gh api graphql -H "GraphQL-Features: issue_types" -f query='{ repository(owner:"OWNER", name:"REPO"){ issue(number:N){ issueType{ name } } } }'` 等
+  - 個人リポジトリなど Type が未設定の場合はタイトル・ラベルから推測せず `feature/` をデフォルトに
 - 既に同名ブランチがあれば `git checkout` で切替、無ければ `git checkout -b`
 - **current branch が main/master でない場合**、ユーザーに「作業中のブランチから切り替えていいか」を確認してから切る
 

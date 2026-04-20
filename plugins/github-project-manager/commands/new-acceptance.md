@@ -61,11 +61,12 @@ $ARGUMENTS
 必須設定:
 - `--title "検収: {対象}"`
 - `--body "..."`（上記テンプレ）
-- `--label "納品,重要度:<クライアント確認>"` もしくは `"検収,重要度:中"` — フェーズラベル体系に応じて
+- `--label "<フェーズ>,重要度:<クライアント確認>"` — **Label は フェーズ + 重要度の 2 軸のみ**。「検収」「acceptance」等の Type 語を Label に含めない
+  - フェーズは通常 `納品`。フェーズラベル体系に応じて
 - `--assignee {client-handle}` — **クライアントをアサイン**（開発者ではない）
 - `--project "<プロジェクト名>"`
 
-Type 設定（org リポジトリのみ）: `updateIssueIssueType` mutation で **`Acceptance`** に設定。
+**Type 設定**（org リポジトリのみ）: `updateIssueIssueType` mutation で **`Acceptance`** に設定。これが検収性質を表現する一次情報。
 
 ### 4. Relationships 設定
 

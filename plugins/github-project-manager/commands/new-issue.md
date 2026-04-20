@@ -25,9 +25,10 @@ $ARGUMENTS
 
 ### 必須設定
 1. `gh api user --jq '.login'` でアサイン
-2. フェーズラベル + 重要度ラベル（`--label "開発,重要度:中"` 等）
+2. **Label は フェーズ + 重要度の 2 軸のみ**（`--label "開発,重要度:中"` 等）
+   - Type 語（bug/task/feature/minutes/acceptance/バグ/機能/タスク/議事録/検収）を Label に含めない
 3. プロジェクト紐付け（`--project` で該当プロジェクトに追加）
-4. タイプ設定（`gh api graphql` で Issue Type 設定）
+4. **Type 設定**（`gh api graphql` の `updateIssueIssueType` で Task / Bug / Feature から選ぶ、org リポジトリのみ）
 
 ### 親子関係（該当する場合）
 - **GitHub Sub-issues API で親子関係を設定する**（`Parent: #N` テキストは使わない）
