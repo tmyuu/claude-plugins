@@ -14,6 +14,21 @@ BRANCH_ISSUE=$(echo "$BRANCH" | grep -oE '#[0-9]+' | grep -oE '[0-9]+' | head -1
 OPEN_ISSUES=$(gh issue list --limit 15 --state open --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>/dev/null)
 
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  # 紐付け先 Project が 1 つも無いリポジトリでは Issue を作っても --project が指定できない。
+  # 先に /new-project でブートストラップする必要があるかをチェックする。
+  PROJECT_BOOTSTRAP_HINT=""
+  if get_repo_info 2>/dev/null; then
+    LINKED_COUNT=$(gh api graphql -f query="
+      {
+        repository(owner: \"$OWNER\", name: \"$REPO_NAME\") {
+          projectsV2(first: 5) { totalCount }
+        }
+      }" --jq '.data.repository.projectsV2.totalCount // 0' 2>/dev/null)
+    if [ -z "$LINKED_COUNT" ] || [ "$LINKED_COUNT" = "0" ]; then
+      PROJECT_BOOTSTRAP_HINT=$'\n**注意: このリポジトリにリンク済みの Project がありません。** Issue 作成前に `/new-project` で Project をブートストラップしてください。'
+    fi
+  fi
+
   cat <<GUIDANCE
 ## ワークフローリマインド
 
@@ -25,7 +40,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
 
 ### オープン Issue
 ${OPEN_ISSUES:-（なし）}
-
+${PROJECT_BOOTSTRAP_HINT}
 **重要: main ブランチ上でのソースコード編集はブロックされます。必ず Issue を確定し、feature ブランチを作成してから着手してください。**
 GUIDANCE
 elif [ -n "$BRANCH_ISSUE" ]; then
