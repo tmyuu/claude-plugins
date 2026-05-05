@@ -81,6 +81,8 @@ if [ -n "$PROJECTS_JSON" ] && [ "$PROJECTS_JSON" != "null" ] && [ "$PROJECTS_JSO
   ' 2>/dev/null
 else
   echo "（プロジェクトなし）"
+  echo ""
+  echo "ヒント: 紐付け先 Project が必要なら \`/new-project\` で作成 + リポリンクできます。"
 fi
 echo ""
 

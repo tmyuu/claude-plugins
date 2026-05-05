@@ -83,8 +83,9 @@ user-invocable: false
 - **GitHub Projects v2** のみ対応。プロジェクトに紐付いていない Issue は遷移しない
 
 ### プロジェクト管理
-- プロジェクトは**既存のものに紐付ける**（新規作成は `guard-project-create.sh` でブロック）
-- プロジェクト作成後は**必ずリポジトリにリンク**する（`linkProjectV2ToRepository`）
+- プロジェクトは**既存のものに紐付ける**のが原則（直接の `gh project create` は `guard-project-create.sh` でブロック）
+- 新規 Project が必要な場合は **`/new-project` を使う**（作成 + リポジトリリンクを一括、`CLAUDE_NEW_PROJECT_ALLOW=1` で例外通過）
+- リポリンクなしの Project を放置しない（SessionStart で `リポリンク:✗` として検出される）
 - Issue は `--project` で紐付け
 
 ### 検収（Acceptance）のステータス運用

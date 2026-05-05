@@ -50,6 +50,10 @@ CLAUDE.md 追記に加え、**taxonomy.json に沿って GitHub Label を同期*
 ## ワークフロー
 
 ```
+  [初期セットアップ]
+   /new-project   → Project 作成 + リポジトリリンク（空リポからのブートストラップ）
+   /init-workflow → CLAUDE.md 整備 + Label 同期
+
   [起点コマンド]                                [作業開始]
    ┌─ /new-issue       (Task/Bug/Feature) ─┐
    ├─ /new-minutes     (議事録)            │
@@ -95,6 +99,7 @@ CLAUDE.md 追記に加え、**taxonomy.json に沿って GitHub Label を同期*
 
 | コマンド | 説明 |
 |---------|------|
+| `/new-project` | GitHub Project (v2) を作成 + リポジトリにリンク（空リポからのブートストラップ） |
 | `/init-workflow` | CLAUDE.md を生成/更新。taxonomy に沿って GitHub Label を同期 |
 | `/new-issue` | Task/Bug/Feature 向け汎用 Issue 作成 |
 | `/new-minutes` | 議事録 md → Minutes Issue（md 未作成なら `docs/meetings/` にテンプレ生成） |
@@ -113,7 +118,7 @@ CLAUDE.md 追記に加え、**taxonomy.json に沿って GitHub Label を同期*
 | guard-branch.sh | PreToolUse(Bash) | 1 | ブランチ名の #N + Issue 実在・状態(open)検証 |
 | guard-issue-create.sh | PreToolUse(Bash) | 1 | **taxonomy 駆動**で Label/Type 検証、Type 語混入ブロック |
 | guard-pr-create.sh | PreToolUse(Bash) | 1 | 必須オプション + Closes #N + **taxonomy 駆動 Label 検証** |
-| guard-project-create.sh | PreToolUse(Bash) | 3 | プロジェクト新規作成をブロック |
+| guard-project-create.sh | PreToolUse(Bash) | 3 | プロジェクト新規作成をブロック（`/new-project` の `CLAUDE_NEW_PROJECT_ALLOW=1` で例外通過） |
 | guard-close.sh | PreToolUse(Bash) | 4 | **全経路で未完了チェックリストのクローズをブロック** |
 | review-issue-type.sh | PostToolUse(Bash) | 1 | org リポジトリでの Issue Type 設定リマインド |
 | auto-status-transition.sh | PostToolUse(Bash) | 3 | commit → In Progress、close/merge → Done |
@@ -143,6 +148,7 @@ github-project-manager/
 ├── agents/
 │   └── issue-manager.md
 ├── commands/
+│   ├── new-project.md                 # Project 作成 + リポリンク
 │   ├── init-workflow.md               # CLAUDE.md + Label 同期
 │   ├── new-issue.md
 │   ├── new-minutes.md
